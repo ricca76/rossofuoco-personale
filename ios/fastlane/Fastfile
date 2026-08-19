@@ -11,15 +11,12 @@ platform :ios do
     UI.user_error!("APP_STORE_CONNECT_ISSUER_ID secret is missing!") if issuer_id.nil? || issuer_id.empty?
     UI.user_error!("APP_STORE_CONNECT_API_KEY_BASE64 secret is missing!") if key_base64.nil? || key_base64.empty?
 
-    # Ripristina formattazione PEM se necessario
+    # Normalizzazione chiave PEM
     raw_key = key_base64
     if !raw_key.include?("-----BEGIN")
-      # Se era in base64 pura
       decoded = Base64.decode64(raw_key)
       raw_key = decoded.include?("-----BEGIN") ? decoded : "-----BEGIN PRIVATE KEY-----\n" + raw_key.scan(/.{1,64}/).join("\n") + "\n-----END PRIVATE KEY-----"
     end
-
-    # Assicura newline corretti (\n reali invece di \n letterali o spazi)
     raw_key = raw_key.gsub('\n', "\n").strip
 
     key_dir = File.expand_path("~/.appstoreconnect/private_keys")
@@ -34,7 +31,10 @@ platform :ios do
       in_house: false
     )
 
-    # 1. Genera Xcode Project se non ancora presente
+    bundle_id = "com.rossofuoco.personale"
+    app_name = "RossoFuoco Personale"
+
+    # 1. Genera Xcode Project
     sh("cd ../.. && xcodegen generate")
 
     # 2. Configura Keychain temporaneo per la firma
@@ -48,20 +48,50 @@ platform :ios do
       timeout: 3600
     )
 
-    # 3. Ottieni o genera certificato di distribuzione iOS
+    # 3. Assicura che l'App Identifier esista nel Developer Portal
+    app_identifier = Spaceship::ConnectAPI::BundleId.find(bundle_id)
+    if app_identifier.nil?
+      UI.message("Creating App Identifier #{bundle_id} on Apple Developer portal...")
+      app_identifier = Spaceship::ConnectAPI::BundleId.create(
+        identifier: bundle_id,
+        name: app_name,
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS
+      )
+      UI.success("App Identifier #{bundle_id} created successfully!")
+    else
+      UI.message("App Identifier #{bundle_id} already exists on Apple Developer portal.")
+    end
+
+    # 4. Assicura che l'App esista su App Store Connect
+    app = Spaceship::ConnectAPI::App.find(bundle_id)
+    if app.nil?
+      UI.message("Creating App #{app_name} on App Store Connect...")
+      Spaceship::ConnectAPI::App.create(
+        bundle_id: bundle_id,
+        name: app_name,
+        locale: "it-IT",
+        sku: "rossofuoco-pers-#{Time.now.to_i}",
+        primary_locale: "it-IT"
+      )
+      UI.success("App created on App Store Connect!")
+    else
+      UI.message("App already exists on App Store Connect.")
+    end
+
+    # 5. Ottieni o genera certificato di distribuzione iOS
     get_certificates(
       api_key: api_key,
       development: false,
       keychain_path: File.expand_path("~/Library/Keychains/#{keychain_name}-db")
     )
 
-    # 4. Ottieni o genera provisioning profile App Store per iOS
+    # 6. Ottieni o genera provisioning profile App Store per iOS
     get_provisioning_profile(
       api_key: api_key,
-      app_identifier: "com.rossofuoco.personale"
+      app_identifier: bundle_id
     )
 
-    # 5. Compila e firma l'app in formato .ipa
+    # 7. Compila e firma l'app in formato .ipa
     build_app(
       project: "RossoFuoco.xcodeproj",
       scheme: "RossoFuoco",
@@ -70,7 +100,7 @@ platform :ios do
       output_directory: "./build-output"
     )
 
-    # 6. Carica direttamente su TestFlight
+    # 8. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
