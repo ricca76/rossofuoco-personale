@@ -78,16 +78,36 @@ platform :ios do
       force: true
     )
 
-    # 5. Compila e firma l'app in formato .ipa
+    profile_name = lane_context[SharedValues::SIGH_NAME] || ENV["SIGH_NAME"]
+    profile_uuid = lane_context[SharedValues::SIGH_UUID] || ENV["SIGH_UUID"]
+    UI.message("Using provisioning profile: #{profile_name} (UUID: #{profile_uuid})")
+
+    # 5. Aggiorna configurazione Code Signing del progetto Xcode
+    update_code_signing_settings(
+      path: "../RossoFuoco.xcodeproj",
+      use_automatic_signing: false,
+      profile_name: profile_name,
+      profile_uuid: profile_uuid,
+      bundle_identifier: bundle_id,
+      code_sign_identity: "Apple Distribution"
+    )
+
+    # 6. Compila e firma l'app in formato .ipa
     build_app(
       project: "../RossoFuoco.xcodeproj",
       scheme: "RossoFuoco",
       export_method: "app-store",
       clean: true,
-      output_directory: "../build-output"
+      output_directory: "../build-output",
+      export_options: {
+        provisioningProfiles: {
+          bundle_id => profile_name
+        }
+      },
+      xcargs: "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}' PROVISIONING_PROFILE='#{profile_uuid}' CODE_SIGN_STYLE=Manual"
     )
 
-    # 6. Carica direttamente su TestFlight
+    # 7. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
