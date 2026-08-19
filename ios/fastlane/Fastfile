@@ -7,14 +7,12 @@ platform :ios do
     issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"]&.strip
     key_base64 = ENV["APP_STORE_CONNECT_API_KEY_BASE64"]&.strip
 
-    UI.user_error!("APP_STORE_CONNECT_KEY_ID secret is missing in GitHub Repository Secrets!") if key_id.nil? || key_id.empty?
-    UI.user_error!("APP_STORE_CONNECT_ISSUER_ID secret is missing in GitHub Repository Secrets!") if issuer_id.nil? || issuer_id.empty?
-    UI.user_error!("APP_STORE_CONNECT_API_KEY_BASE64 secret is missing in GitHub Repository Secrets!") if key_base64.nil? || key_base64.empty?
+    UI.user_error!("APP_STORE_CONNECT_KEY_ID secret is missing!") if key_id.nil? || key_id.empty?
+    UI.user_error!("APP_STORE_CONNECT_ISSUER_ID secret is missing!") if issuer_id.nil? || issuer_id.empty?
+    UI.user_error!("APP_STORE_CONNECT_API_KEY_BASE64 secret is missing!") if key_base64.nil? || key_base64.empty?
 
-    # Decodifica la chiave se in Base64 oppure usa il testo raw PEM
     key_content = key_base64.include?("BEGIN PRIVATE KEY") ? key_base64 : Base64.decode64(key_base64)
 
-    # Scrivi il file .p8 su disco per supporto completo Fastlane e Altool
     key_dir = File.expand_path("~/.appstoreconnect/private_keys")
     FileUtils.mkdir_p(key_dir)
     key_filepath = File.join(key_dir, "AuthKey_#{key_id}.p8")
@@ -27,33 +25,33 @@ platform :ios do
       in_house: false
     )
 
-    # 1. Crea App su App Store Connect se non esiste
-    produce(
-      api_key: api_key,
-      app_identifier: "com.rossofuoco.personale",
-      app_name: "RossoFuoco Personale",
-      language: "Italian",
-      app_version: "1.0.0",
-      sku: "rossofuoco-personale-1"
-    ) rescue UI.message("App already exists on App Store Connect")
+    # 1. Verifica / Crea App se necessario
+    begin
+      produce(
+        api_key: api_key,
+        app_identifier: "com.rossofuoco.personale",
+        app_name: "RossoFuoco Personale",
+        language: "Italian",
+        app_version: "1.0.0",
+        sku: "rossofuoco-personale-1"
+      )
+    rescue => e
+      UI.message("App produce notice: #{e.message}")
+    end
 
-    # 2. Ottieni o genera certificato di distribuzione
+    # 2. Ottieni o genera certificato di distribuzione iOS (development: false)
     get_certificates(
       api_key: api_key,
-      type: "distribution"
+      development: false
     )
 
-    # 3. Ottieni o genera provisioning profile App Store
+    # 3. Ottieni o genera provisioning profile App Store per iOS
     get_provisioning_profile(
       api_key: api_key,
-      app_identifier: "com.rossofuoco.personale",
-      type: "app-store"
+      app_identifier: "com.rossofuoco.personale"
     )
 
-    # 4. Genera Xcode Project
-    sh("cd ../.. && xcodegen generate")
-
-    # 5. Compila e firma l'app in formato .ipa
+    # 4. Compila e firma l'app in formato .ipa
     build_app(
       project: "RossoFuoco.xcodeproj",
       scheme: "RossoFuoco",
@@ -62,7 +60,7 @@ platform :ios do
       output_directory: "./build-output"
     )
 
-    # 6. Carica direttamente su TestFlight
+    # 5. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
