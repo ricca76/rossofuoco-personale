@@ -34,10 +34,7 @@ platform :ios do
     bundle_id = "com.rossofuoco.personale"
     app_name = "RossoFuoco Personale"
 
-    # 1. Genera Xcode Project da XcodeGen
-    sh("cd ../.. && xcodegen generate")
-
-    # 2. Configura Keychain temporaneo per la firma
+    # 1. Configura Keychain temporaneo per la firma
     keychain_name = "fastlane_keychain"
     keychain_password = "rossofuoco_temp_pass"
     create_keychain(
@@ -48,66 +45,33 @@ platform :ios do
       timeout: 3600
     )
 
-    # 3. Assicura che il Bundle ID esista su Apple Developer
-    begin
-      app_identifier = Spaceship::ConnectAPI::BundleId.find(bundle_id)
-      if app_identifier.nil?
-        UI.message("Creating App Identifier #{bundle_id} on Apple Developer portal...")
-        Spaceship::ConnectAPI::BundleId.create(
-          identifier: bundle_id,
-          name: app_name,
-          platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS
-        )
-        UI.success("App Identifier #{bundle_id} created successfully!")
-      else
-        UI.message("App Identifier #{bundle_id} already exists on Apple Developer portal.")
-      end
-    rescue => e
-      UI.important("Bundle ID check/create note: #{e.message}")
-    end
-
-    # 4. Assicura che l'App esista su App Store Connect
-    begin
-      app = Spaceship::ConnectAPI::App.find(bundle_id)
-      if app.nil?
-        UI.message("Creating App #{app_name} on App Store Connect...")
-        Spaceship::ConnectAPI::App.create(
-          name: app_name,
-          primary_locale: "it-IT",
-          bundle_id: bundle_id,
-          sku: "rossofuoco-pers-#{Time.now.to_i}"
-        )
-        UI.success("App created on App Store Connect!")
-      else
-        UI.message("App already exists on App Store Connect.")
-      end
-    rescue => e
-      UI.important("App Connect check/create note: #{e.message}")
-    end
-
-    # 5. Ottieni o genera certificato di distribuzione iOS
+    # 2. Ottieni o genera certificato di distribuzione iOS
     get_certificates(
       api_key: api_key,
       development: false,
-      keychain_path: File.expand_path("~/Library/Keychains/#{keychain_name}-db")
+      keychain_path: File.expand_path("~/Library/Keychains/#{keychain_name}-db"),
+      keychain_password: keychain_password
     )
 
-    # 6. Ottieni o genera provisioning profile App Store per iOS
+    # 3. Ottieni o genera provisioning profile App Store per iOS
     get_provisioning_profile(
       api_key: api_key,
       app_identifier: bundle_id
     )
 
-    # 7. Compila e firma l'app in formato .ipa
+    # 4. Genera Xcode Project nella directory corretta
+    sh("cd .. && xcodegen generate")
+
+    # 5. Compila e firma l'app in formato .ipa
     build_app(
-      project: "RossoFuoco.xcodeproj",
+      project: "../RossoFuoco.xcodeproj",
       scheme: "RossoFuoco",
       export_method: "app-store",
       clean: true,
-      output_directory: "./build-output"
+      output_directory: "../build-output"
     )
 
-    # 8. Carica direttamente su TestFlight
+    # 6. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
