@@ -11,12 +11,21 @@ platform :ios do
     UI.user_error!("APP_STORE_CONNECT_ISSUER_ID secret is missing!") if issuer_id.nil? || issuer_id.empty?
     UI.user_error!("APP_STORE_CONNECT_API_KEY_BASE64 secret is missing!") if key_base64.nil? || key_base64.empty?
 
-    key_content = key_base64.include?("BEGIN PRIVATE KEY") ? key_base64 : Base64.decode64(key_base64)
+    # Ripristina formattazione PEM se necessario
+    raw_key = key_base64
+    if !raw_key.include?("-----BEGIN")
+      # Se era in base64 pura
+      decoded = Base64.decode64(raw_key)
+      raw_key = decoded.include?("-----BEGIN") ? decoded : "-----BEGIN PRIVATE KEY-----\n" + raw_key.scan(/.{1,64}/).join("\n") + "\n-----END PRIVATE KEY-----"
+    end
+
+    # Assicura newline corretti (\n reali invece di \n letterali o spazi)
+    raw_key = raw_key.gsub('\n', "\n").strip
 
     key_dir = File.expand_path("~/.appstoreconnect/private_keys")
     FileUtils.mkdir_p(key_dir)
     key_filepath = File.join(key_dir, "AuthKey_#{key_id}.p8")
-    File.write(key_filepath, key_content)
+    File.write(key_filepath, raw_key + "\n")
 
     api_key = app_store_connect_api_key(
       key_id: key_id,
@@ -25,33 +34,34 @@ platform :ios do
       in_house: false
     )
 
-    # 1. Verifica / Crea App se necessario
-    begin
-      produce(
-        api_key: api_key,
-        app_identifier: "com.rossofuoco.personale",
-        app_name: "RossoFuoco Personale",
-        language: "Italian",
-        app_version: "1.0.0",
-        sku: "rossofuoco-personale-1"
-      )
-    rescue => e
-      UI.message("App produce notice: #{e.message}")
-    end
+    # 1. Genera Xcode Project se non ancora presente
+    sh("cd ../.. && xcodegen generate")
 
-    # 2. Ottieni o genera certificato di distribuzione iOS (development: false)
-    get_certificates(
-      api_key: api_key,
-      development: false
+    # 2. Configura Keychain temporaneo per la firma
+    keychain_name = "fastlane_keychain"
+    keychain_password = "rossofuoco_temp_pass"
+    create_keychain(
+      name: keychain_name,
+      password: keychain_password,
+      default_keychain: true,
+      unlock: true,
+      timeout: 3600
     )
 
-    # 3. Ottieni o genera provisioning profile App Store per iOS
+    # 3. Ottieni o genera certificato di distribuzione iOS
+    get_certificates(
+      api_key: api_key,
+      development: false,
+      keychain_path: File.expand_path("~/Library/Keychains/#{keychain_name}-db")
+    )
+
+    # 4. Ottieni o genera provisioning profile App Store per iOS
     get_provisioning_profile(
       api_key: api_key,
       app_identifier: "com.rossofuoco.personale"
     )
 
-    # 4. Compila e firma l'app in formato .ipa
+    # 5. Compila e firma l'app in formato .ipa
     build_app(
       project: "RossoFuoco.xcodeproj",
       scheme: "RossoFuoco",
@@ -60,7 +70,7 @@ platform :ios do
       output_directory: "./build-output"
     )
 
-    # 5. Carica direttamente su TestFlight
+    # 6. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
