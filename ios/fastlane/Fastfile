@@ -80,13 +80,14 @@ platform :ios do
 
     profile_name = lane_context[SharedValues::SIGH_NAME] || ENV["SIGH_NAME"]
     profile_uuid = lane_context[SharedValues::SIGH_UUID] || ENV["SIGH_UUID"]
-    team_id = lane_context[SharedValues::SIGH_TEAM_ID] || ENV["SIGH_TEAM_ID"] || api_key[:team_id]
+    profile_path = lane_context[SharedValues::SIGH_PROFILE_PATH] || ENV["SIGH_PROFILE_PATH"]
 
-    # Se team_id non è presente in context, estraiamolo dal client ConnectAPI
-    if team_id.nil? || team_id.empty?
-      begin
-        team_id = Spaceship::ConnectAPI.client.team_id
-      rescue => _
+    # Estrazione automatica del Team ID dal file provisioning profile
+    team_id = nil
+    if profile_path && File.exist?(profile_path)
+      plist_data = `security cms -D -i "#{profile_path}" 2>/dev/null`
+      if plist_data =~ /<key>TeamIdentifier<\/key>\s*<array>\s*<string>([^<]+)<\/string>/m
+        team_id = $1.strip
       end
     end
 
@@ -103,10 +104,12 @@ platform :ios do
       team_id: team_id
     )
 
-    update_project_team(
-      path: "../RossoFuoco.xcodeproj",
-      teamid: team_id
-    ) if team_id && !team_id.empty?
+    if team_id && !team_id.empty?
+      update_project_team(
+        path: "../RossoFuoco.xcodeproj",
+        teamid: team_id
+      )
+    end
 
     # 6. Compila e firma l'app in formato .ipa
     xcargs_params = [
