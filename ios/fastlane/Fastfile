@@ -45,52 +45,44 @@ platform :ios do
       timeout: 3600
     )
 
-    # 2. Gestione Certificati di Distribuzione (con fallback e pulizia certificati orfani se limite raggiunto)
+    # 2. Pulizia preventiva di TUTTI i vecchi certificati di distribuzione senza chiave privata locale per garantire slot libero
     keychain_db = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
     begin
-      get_certificates(
-        api_key: api_key,
-        development: false,
-        keychain_path: keychain_db,
-        keychain_password: keychain_password
-      )
-    rescue => e
-      if e.message.include?("maximum number of available Distribution certificates") || e.message.include?("Could not create another")
-        UI.important("Certificate limit reached on Apple Developer portal. Cleaning up oldest unused certificate...")
+      certs = Spaceship::ConnectAPI::Certificate.all
+      dist_certs = certs.select { |c| c.certificate_type.to_s.downcase.include?("distribution") || c.certificate_type.to_s.downcase.include?("ios_dist") }
+      UI.message("Found #{dist_certs.count} existing Distribution certificates in Apple Developer account.")
+      dist_certs.each do |c|
+        UI.message("Revoking orphan certificate: #{c.id} (#{c.name}) to ensure a fresh clean slot...")
         begin
-          certs = Spaceship::ConnectAPI::Certificate.all
-          dist_certs = certs.select { |c| c.certificate_type.to_s.downcase.include?("distribution") }
-          if dist_certs.any?
-            oldest_cert = dist_certs.first
-            UI.message("Revoking certificate: #{oldest_cert.id} (#{oldest_cert.name}) to free up a slot...")
-            oldest_cert.delete!
-            UI.success("Old certificate revoked successfully! Creating fresh certificate...")
-          end
-        rescue => cleanup_err
-          UI.important("Notice on cert cleanup: #{cleanup_err.message}")
+          c.delete!
+        rescue => del_err
+          UI.important("Could not delete cert #{c.id}: #{del_err.message}")
         end
-
-        get_certificates(
-          api_key: api_key,
-          development: false,
-          keychain_path: keychain_db,
-          keychain_password: keychain_password
-        )
-      else
-        raise e
       end
+    rescue => list_err
+      UI.important("Certificate inspection notice: #{list_err.message}")
     end
 
-    # 3. Ottieni o genera provisioning profile App Store per iOS
-    get_provisioning_profile(
+    # 3. Genera nuovo certificato di distribuzione con chiave privata nel portachiavi locale
+    get_certificates(
       api_key: api_key,
-      app_identifier: bundle_id
+      development: false,
+      keychain_path: keychain_db,
+      keychain_password: keychain_password,
+      force: true
     )
 
-    # 4. Genera Xcode Project nella directory corretta
+    # 4. Ottieni o genera provisioning profile App Store per iOS
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: bundle_id,
+      force: true
+    )
+
+    # 5. Genera Xcode Project nella directory corretta
     sh("cd .. && xcodegen generate")
 
-    # 5. Compila e firma l'app in formato .ipa
+    # 6. Compila e firma l'app in formato .ipa
     build_app(
       project: "../RossoFuoco.xcodeproj",
       scheme: "RossoFuoco",
@@ -99,7 +91,7 @@ platform :ios do
       output_directory: "../build-output"
     )
 
-    # 6. Carica direttamente su TestFlight
+    # 7. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
