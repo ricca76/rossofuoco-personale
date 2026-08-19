@@ -1,0 +1,27 @@
+name: RossoFuoco
+options:
+  bundleIdPrefix: com.rossofuoco
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  RossoFuoco:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: ios
+    info:
+      path: ios/Info.plist
+      properties:
+        CFBundleDisplayName: "RossoFuoco"
+        CFBundleIdentifier: "com.rossofuoco.personale"
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rossofuoco.personale
+        CODE_SIGN_STYLE: Manual
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ios/Info.plist
