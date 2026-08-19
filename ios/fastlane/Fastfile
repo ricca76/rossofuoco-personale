@@ -32,7 +32,6 @@ platform :ios do
     )
 
     bundle_id = "com.rossofuoco.personale"
-    app_name = "RossoFuoco Personale"
 
     # 1. Configura Keychain temporaneo per la firma
     keychain_name = "fastlane_keychain"
@@ -79,23 +78,16 @@ platform :ios do
       force: true
     )
 
-    # 5. Assicura che il progetto Xcode esista
-    repo_root = File.expand_path("../..", __FILE__)
-    xcodeproj_path = File.join(repo_root, "RossoFuoco.xcodeproj")
-    if !File.exist?(xcodeproj_path)
-      sh("cd #{repo_root} && xcodegen generate")
-    end
-
-    # 6. Compila e firma l'app in formato .ipa
+    # 5. Compila e firma l'app in formato .ipa
     build_app(
-      project: xcodeproj_path,
+      project: "../RossoFuoco.xcodeproj",
       scheme: "RossoFuoco",
       export_method: "app-store",
       clean: true,
-      output_directory: File.join(repo_root, "build-output")
+      output_directory: "../build-output"
     )
 
-    # 7. Carica direttamente su TestFlight
+    # 6. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
