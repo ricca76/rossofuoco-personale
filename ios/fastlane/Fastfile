@@ -32,6 +32,7 @@ platform :ios do
     )
 
     bundle_id = "com.rossofuoco.personale"
+    app_title = "RossoFuoco"
 
     # 1. Configura Keychain temporaneo per la firma
     keychain_name = "fastlane_keychain"
@@ -62,7 +63,20 @@ platform :ios do
       UI.important("Certificate inspection notice: #{list_err.message}")
     end
 
-    # 3. Genera nuovo certificato di distribuzione con chiave privata nel portachiavi locale
+    # 3. Assicura che l'app sia registrata / creata su App Store Connect
+    begin
+      produce(
+        api_key: api_key,
+        app_identifier: bundle_id,
+        app_name: app_title,
+        language: "Italian",
+        skip_itc: false
+      )
+    rescue => produce_err
+      UI.important("Notice during App creation in App Store Connect: #{produce_err.message}")
+    end
+
+    # 4. Genera nuovo certificato di distribuzione con chiave privata nel portachiavi locale
     get_certificates(
       api_key: api_key,
       development: false,
@@ -71,7 +85,7 @@ platform :ios do
       force: true
     )
 
-    # 4. Ottieni o genera provisioning profile App Store per iOS
+    # 5. Ottieni o genera provisioning profile App Store per iOS
     get_provisioning_profile(
       api_key: api_key,
       app_identifier: bundle_id,
@@ -82,7 +96,6 @@ platform :ios do
     profile_uuid = lane_context[SharedValues::SIGH_UUID] || ENV["SIGH_UUID"]
     profile_path = lane_context[SharedValues::SIGH_PROFILE_PATH] || ENV["SIGH_PROFILE_PATH"]
 
-    # Estrazione automatica del Team ID dal file provisioning profile
     team_id = nil
     if profile_path && File.exist?(profile_path)
       plist_data = `security cms -D -i "#{profile_path}" 2>/dev/null`
@@ -93,7 +106,7 @@ platform :ios do
 
     UI.message("Using provisioning profile: #{profile_name} (UUID: #{profile_uuid}) with Team ID: #{team_id}")
 
-    # 5. Aggiorna configurazione Code Signing del progetto Xcode
+    # 6. Aggiorna configurazione Code Signing del progetto Xcode
     update_code_signing_settings(
       path: "../RossoFuoco.xcodeproj",
       use_automatic_signing: false,
@@ -111,7 +124,7 @@ platform :ios do
       )
     end
 
-    # 6. Compila e firma l'app in formato .ipa
+    # 7. Compila e firma l'app in formato .ipa
     xcargs_params = [
       "CODE_SIGN_STYLE=Manual",
       "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
@@ -134,9 +147,10 @@ platform :ios do
       xcargs: xcargs_params.join(" ")
     )
 
-    # 7. Carica direttamente su TestFlight
+    # 8. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
+      app_identifier: bundle_id,
       skip_waiting_for_build_processing: true
     )
   end
