@@ -45,13 +45,41 @@ platform :ios do
       timeout: 3600
     )
 
-    # 2. Ottieni o genera certificato di distribuzione iOS
-    get_certificates(
-      api_key: api_key,
-      development: false,
-      keychain_path: File.expand_path("~/Library/Keychains/#{keychain_name}-db"),
-      keychain_password: keychain_password
-    )
+    # 2. Gestione Certificati di Distribuzione (con fallback e pulizia certificati orfani se limite raggiunto)
+    keychain_db = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
+    begin
+      get_certificates(
+        api_key: api_key,
+        development: false,
+        keychain_path: keychain_db,
+        keychain_password: keychain_password
+      )
+    rescue => e
+      if e.message.include?("maximum number of available Distribution certificates") || e.message.include?("Could not create another")
+        UI.important("Certificate limit reached on Apple Developer portal. Cleaning up oldest unused certificate...")
+        begin
+          certs = Spaceship::ConnectAPI::Certificate.all
+          dist_certs = certs.select { |c| c.certificate_type.to_s.downcase.include?("distribution") }
+          if dist_certs.any?
+            oldest_cert = dist_certs.first
+            UI.message("Revoking certificate: #{oldest_cert.id} (#{oldest_cert.name}) to free up a slot...")
+            oldest_cert.delete!
+            UI.success("Old certificate revoked successfully! Creating fresh certificate...")
+          end
+        rescue => cleanup_err
+          UI.important("Notice on cert cleanup: #{cleanup_err.message}")
+        end
+
+        get_certificates(
+          api_key: api_key,
+          development: false,
+          keychain_path: keychain_db,
+          keychain_password: keychain_password
+        )
+      else
+        raise e
+      end
+    end
 
     # 3. Ottieni o genera provisioning profile App Store per iOS
     get_provisioning_profile(
