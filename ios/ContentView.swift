@@ -3,9 +3,13 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var authManager = BiometricAuthManager()
     @State private var isLoading = true
+    @State private var hasError = false
     @State private var canGoBack = false
     @State private var canGoForward = false
     @State private var reloadTrigger = false
+    @State private var backTrigger = false
+    @State private var forwardTrigger = false
+    @State private var homeTrigger = false
 
     private let portalURL = URL(string: "https://rossofuoco.eu/personale/")!
     private let rossoColor = Color(red: 211/255, green: 47/255, blue: 47/255)
@@ -36,6 +40,7 @@ struct ContentView: View {
                     Spacer()
 
                     Button(action: {
+                        hasError = false
                         reloadTrigger = true
                     }) {
                         Image(systemName: "arrow.clockwise")
@@ -57,29 +62,72 @@ struct ContentView: View {
                 .padding(.vertical, 10)
                 .background(rossoColor)
 
-                // Loading Indicator
+                // Loading Bar
                 if isLoading {
                     ProgressView()
                         .progressViewStyle(LinearProgressViewStyle(tint: rossoColor))
                         .frame(height: 2)
                 }
 
-                // Web Content
-                WebViewContainer(
-                    url: portalURL,
-                    isLoading: $isLoading,
-                    canGoBack: $canGoBack,
-                    canGoForward: $canGoForward,
-                    reloadTrigger: $reloadTrigger,
-                    onBiometricRequested: {
-                        authManager.authenticate { _ in }
+                // Main Content or Offline State
+                ZStack {
+                    WebViewContainer(
+                        url: portalURL,
+                        isLoading: $isLoading,
+                        canGoBack: $canGoBack,
+                        canGoForward: $canGoForward,
+                        reloadTrigger: $reloadTrigger,
+                        backTrigger: $backTrigger,
+                        forwardTrigger: $forwardTrigger,
+                        homeTrigger: $homeTrigger,
+                        hasError: $hasError,
+                        onBiometricRequested: {
+                            authManager.authenticate { _ in }
+                        }
+                    )
+                    .opacity(hasError ? 0 : 1)
+
+                    if hasError {
+                        VStack(spacing: 16) {
+                            Image(systemName: "wifi.slash")
+                                .font(.system(size: 50))
+                                .foregroundColor(rossoColor)
+
+                            Text("Impossibile caricare il portale")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.primary)
+
+                            Text("Verifica la connessione internet del dispositivo e riprova.")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+
+                            Button(action: {
+                                hasError = false
+                                reloadTrigger = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.clockwise")
+                                    Text("Riprova")
+                                        .fontWeight(.semibold)
+                                }
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(rossoColor)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(UIColor.systemBackground))
                     }
-                )
+                }
 
                 // Bottom Navigation
                 HStack {
                     Button(action: {
-                        // Back action
+                        backTrigger = true
                     }) {
                         Image(systemName: "chevron.backward")
                             .font(.system(size: 18, weight: .semibold))
@@ -89,7 +137,7 @@ struct ContentView: View {
                     .disabled(!canGoBack)
 
                     Button(action: {
-                        // Forward action
+                        forwardTrigger = true
                     }) {
                         Image(systemName: "chevron.forward")
                             .font(.system(size: 18, weight: .semibold))
@@ -101,7 +149,8 @@ struct ContentView: View {
                     Spacer()
 
                     Button(action: {
-                        reloadTrigger = true
+                        hasError = false
+                        homeTrigger = true
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "house.fill")

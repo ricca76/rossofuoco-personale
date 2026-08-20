@@ -7,6 +7,10 @@ struct WebViewContainer: UIViewRepresentable {
     @Binding var canGoBack: Bool
     @Binding var canGoForward: Bool
     @Binding var reloadTrigger: Bool
+    @Binding var backTrigger: Bool
+    @Binding var forwardTrigger: Bool
+    @Binding var homeTrigger: Bool
+    @Binding var hasError: Bool
     var onBiometricRequested: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
@@ -35,6 +39,7 @@ struct WebViewContainer: UIViewRepresentable {
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
+        webView.scrollView.bounces = true
         webView.customUserAgent = (webView.customUserAgent ?? "") + " RossoFuocoApp/1.0"
 
         context.coordinator.webView = webView
@@ -48,6 +53,28 @@ struct WebViewContainer: UIViewRepresentable {
             uiView.reload()
             DispatchQueue.main.async {
                 self.reloadTrigger = false
+            }
+        }
+        if backTrigger {
+            if uiView.canGoBack {
+                uiView.goBack()
+            }
+            DispatchQueue.main.async {
+                self.backTrigger = false
+            }
+        }
+        if forwardTrigger {
+            if uiView.canGoForward {
+                uiView.goForward()
+            }
+            DispatchQueue.main.async {
+                self.forwardTrigger = false
+            }
+        }
+        if homeTrigger {
+            uiView.load(URLRequest(url: url))
+            DispatchQueue.main.async {
+                self.homeTrigger = false
             }
         }
     }
@@ -69,12 +96,14 @@ struct WebViewContainer: UIViewRepresentable {
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.parent.isLoading = true
+                self.parent.hasError = false
             }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
+                self.parent.hasError = false
                 self.parent.canGoBack = webView.canGoBack
                 self.parent.canGoForward = webView.canGoForward
             }
@@ -83,12 +112,14 @@ struct WebViewContainer: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
+                self.parent.hasError = true
             }
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
+                self.parent.hasError = true
             }
         }
     }
