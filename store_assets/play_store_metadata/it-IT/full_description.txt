@@ -1,0 +1,9 @@
+RossoFuoco Personale è l'applicazione ufficiale dedicata ai dipendenti e collaboratori del Gruppo RossoFuoco.
+
+Tutti gli strumenti e le comunicazioni aziendali a portata di mano:
+• Turni e Pianificazione: Consulta in tempo reale i turni di lavoro settimanali, le mansioni assegnate e gli orari di servizio.
+• Bacheca Aziendale: Rimani sempre informato sulle circolari interne, novità di menu e aggiornamenti operativi dalla direzione.
+• Richieste & Servizi: Invia in modo semplice e veloce richieste di acconto/prestito, ferie, permessi e storni di sala/cassa.
+• Accesso Sicuro e Veloce: Autenticazione protetta con supporto a Face ID, Touch ID e credenziali personali riservate.
+
+Nota: L'accesso è riservato esclusivamente al personale autorizzato di RossoFuoco.

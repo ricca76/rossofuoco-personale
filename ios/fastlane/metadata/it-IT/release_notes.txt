@@ -1,0 +1,1 @@
+Release iniziale dell'applicazione RossoFuoco Personale con gestione turni, bacheca avvisi, richieste di acconto e ferie, e supporto all'autenticazione biometrica.
