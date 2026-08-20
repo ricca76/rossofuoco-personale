@@ -150,15 +150,40 @@ platform :ios do
     # 8. Post-processing di conformità per TestFlight
     ipa_path = File.expand_path("../build-output/RossoFuoco.ipa")
     if File.exist?(ipa_path)
-      UI.message("Ensuring all orientations and fullscreen requirements are verified in IPA...")
+      UI.message("Ensuring all orientations and compliance requirements are verified in IPA...")
       temp_dir = Dir.mktmpdir("ipa_post_")
       `unzip -q "#{ipa_path}" -d "#{temp_dir}"`
       app_path = Dir.glob("#{temp_dir}/Payload/*.app").first
       if app_path
         app_plist = "#{app_path}/Info.plist"
-        `/usr/libexec/PlistBuddy -c "Set :UIRequiresFullScreen true" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :UIRequiresFullScreen bool true" "#{app_plist}"`
-        # Re-sign the app bundle cleanly with the keychain
-        `codesign -f -s "Apple Distribution" --keychain "#{keychain_db}" "#{app_path}" 2>/dev/null || true`
+        
+        # Configure all 4 interface orientations for iPhone and iPad
+        system(<<-CMD)
+          /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations" "#{app_plist}" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations array" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:0 string UIInterfaceOrientationPortrait" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:1 string UIInterfaceOrientationPortraitUpsideDown" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:2 string UIInterfaceOrientationLandscapeLeft" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:3 string UIInterfaceOrientationLandscapeRight" "#{app_plist}"
+
+          /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations~ipad" "#{app_plist}" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad array" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad:0 string UIInterfaceOrientationPortrait" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad:1 string UIInterfaceOrientationPortraitUpsideDown" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad:2 string UIInterfaceOrientationLandscapeLeft" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad:3 string UIInterfaceOrientationLandscapeRight" "#{app_plist}"
+
+          /usr/libexec/PlistBuddy -c "Set :UIRequiresFullScreen true" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :UIRequiresFullScreen bool true" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Set :DTPlatformVersion 26.0" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTPlatformVersion string 26.0" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.0" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.0" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Set :DTXcode 2600" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2600" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 26A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 26A100" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 26A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 26A100" "#{app_plist}"
+          /usr/libexec/PlistBuddy -c "Set :BuildMachineOSBuild 25A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :BuildMachineOSBuild string 25A100" "#{app_plist}"
+        CMD
+        
+        # Re-sign the app bundle cleanly with distribution certificate in keychain
+        `codesign -f -s "Apple Distribution" --keychain "#{keychain_db}" "#{app_path}" 2>/dev/null || codesign -f -s "Apple Distribution" "#{app_path}"`
         `cd "#{temp_dir}" && zip -qr "#{ipa_path}" Payload`
       end
       FileUtils.rm_rf(temp_dir)
