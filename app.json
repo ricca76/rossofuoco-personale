@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "RossoFuoco",
+    "slug": "rossofuoco-personale",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#141210"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rossofuoco.personale",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "RossoFuoco richiede Face ID per proteggere l'accesso al portale personale.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIRequiresFullScreen": true
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#E0452E"
+      },
+      "package": "com.rossofuoco.personale",
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "RossoFuoco richiede Face ID per proteggere l'accesso al portale personale."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "rossofuoco-personale"
+      }
+    }
+  }
+}
