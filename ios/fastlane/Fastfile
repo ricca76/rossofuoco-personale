@@ -161,7 +161,8 @@ platform :ios do
       "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
       "PROVISIONING_PROFILE='#{profile_uuid}'",
       "CODE_SIGN_IDENTITY='Apple Distribution'",
-      "CURRENT_PROJECT_VERSION=#{next_build_number}"
+      "CURRENT_PROJECT_VERSION=#{next_build_number}",
+      "INFOPLIST_KEY_UIRequiresFullScreen=YES"
     ]
     xcargs_params << "DEVELOPMENT_TEAM='#{team_id}'" if team_id && !team_id.empty?
 
