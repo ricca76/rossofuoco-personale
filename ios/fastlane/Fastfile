@@ -124,7 +124,7 @@ platform :ios do
       )
     end
 
-    # 7. Compila e firma l'app
+    # 7. Compila e firma l'app nativa
     xcargs_params = [
       "CODE_SIGN_STYLE=Manual",
       "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
@@ -152,18 +152,10 @@ platform :ios do
     )
 
     actual_ipa_path = File.join(output_dir, "RossoFuoco.ipa")
-    UI.message("Build complete. Target IPA: #{actual_ipa_path}")
+    UI.message("Native build complete. Package: #{actual_ipa_path}")
 
-    # 8. Post-processing IPA con patch Mach-O e Info.plist per i validatori App Store Connect
-    patch_script = File.expand_path("../patch_ipa.py")
-    if File.exist?(patch_script) && File.exist?(actual_ipa_path)
-      UI.message("Running Python binary and metadata patcher...")
-      system("python3 '#{patch_script}' '#{actual_ipa_path}' '#{keychain_db}'")
-    end
-
-    UI.message("Uploading patched IPA package to TestFlight: #{actual_ipa_path}")
-
-    # 9. Carica direttamente su TestFlight
+    # 8. Carica direttamente su TestFlight
+    UI.message("Uploading native IPA to TestFlight...")
     upload_to_testflight(
       api_key: api_key,
       app_identifier: bundle_id,

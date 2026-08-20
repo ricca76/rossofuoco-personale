@@ -1,10 +1,24 @@
 import SwiftUI
 import WebKit
 
+class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var delegate: WKScriptMessageHandler?
+    
+    init(delegate: WKScriptMessageHandler) {
+        self.delegate = delegate
+        super.init()
+    }
+    
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        delegate?.userContentController(userContentController, didReceive: message)
+    }
+}
+
 struct WebViewContainer: UIViewRepresentable {
     let url: URL
     @Binding var isLoading: Bool
     @Binding var canGoBack: Bool
+    @Binding var hasError: Bool
     @Binding var webViewReference: WKWebView?
 
     func makeCoordinator() -> Coordinator {
@@ -16,25 +30,35 @@ struct WebViewContainer: UIViewRepresentable {
         configuration.allowsInlineMediaPlayback = true
         configuration.websiteDataStore = WKWebsiteDataStore.default()
 
-        // Iniezione Script Bridge per compatibilità con l'app Android e web app
+        // Bridge Script
         let contentController = WKUserContentController()
-        contentController.add(context.coordinator, name: "rossoFuocoBridge")
+        let weakHandler = WeakScriptMessageHandler(delegate: context.coordinator)
+        contentController.add(weakHandler, name: "rossoFuocoBridge")
 
         let bridgeScriptSource = """
         (function() {
-            window.RossoFuoco = {
-                platform: 'iOS',
-                isApp: true,
-                sendToken: function(token) {
-                    window.webkit.messageHandlers.rossoFuocoBridge.postMessage({ action: 'sendToken', token: token });
-                },
-                triggerHaptic: function(style) {
-                    window.webkit.messageHandlers.rossoFuocoBridge.postMessage({ action: 'triggerHaptic', style: style || 'medium' });
-                },
-                requestBiometricAuth: function() {
-                    window.webkit.messageHandlers.rossoFuocoBridge.postMessage({ action: 'requestBiometrics' });
+            try {
+                if (!window.RossoFuoco) {
+                    window.RossoFuoco = {
+                        platform: 'iOS',
+                        isApp: true,
+                        sendToken: function(token) {
+                            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.rossoFuocoBridge) {
+                                window.webkit.messageHandlers.rossoFuocoBridge.postMessage({ action: 'sendToken', token: token });
+                            }
+                        },
+                        triggerHaptic: function(style) {
+                            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.rossoFuocoBridge) {
+                                window.webkit.messageHandlers.rossoFuocoBridge.postMessage({ action: 'triggerHaptic', style: style || 'medium' });
+                            }
+                        }
+                    };
+                    
+                    var readyEvent = new CustomEvent('RossoFuocoNativeReady', { detail: { platform: 'iOS', app: 'RossoFuoco', version: '1.0.0' } });
+                    window.dispatchEvent(readyEvent);
+                    document.dispatchEvent(readyEvent);
                 }
-            };
+            } catch(e) {}
         })();
         """
         let userScript = WKUserScript(source: bridgeScriptSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
@@ -48,10 +72,11 @@ struct WebViewContainer: UIViewRepresentable {
         webView.backgroundColor = UIColor(red: 0.08, green: 0.07, blue: 0.06, alpha: 1.0)
         webView.scrollView.backgroundColor = UIColor(red: 0.08, green: 0.07, blue: 0.06, alpha: 1.0)
         webView.allowsBackForwardNavigationGestures = true
+        webView.customUserAgent = "RossoFuocoApp/1.0 (iOS; Native)"
 
-        // Pull to refresh nativo
+        // Native pull to refresh
         let refreshControl = UIRefreshControl()
-        refreshControl.tintColor = UIColor(red: 0.88, green: 0.27, blue: 0.18, alpha: 1.0) // Accent Rosso Fuoco
+        refreshControl.tintColor = UIColor(red: 0.88, green: 0.27, blue: 0.18, alpha: 1.0)
         refreshControl.addTarget(context.coordinator, action: #selector(Coordinator.handleRefreshControl(_:)), for: .valueChanged)
         webView.scrollView.refreshControl = refreshControl
 
@@ -66,7 +91,6 @@ struct WebViewContainer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        // Nessun aggiornamento forzato
     }
 
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
@@ -86,6 +110,7 @@ struct WebViewContainer: UIViewRepresentable {
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.parent.isLoading = true
+                self.parent.hasError = false
                 self.parent.canGoBack = webView.canGoBack
             }
         }
@@ -93,6 +118,7 @@ struct WebViewContainer: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
+                self.parent.hasError = false
                 self.parent.canGoBack = webView.canGoBack
             }
         }
@@ -100,11 +126,19 @@ struct WebViewContainer: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
+                self.parent.hasError = true
                 self.parent.canGoBack = webView.canGoBack
             }
         }
 
-        // Gestione messaggi inviati da JavaScript
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            DispatchQueue.main.async {
+                self.parent.isLoading = false
+                self.parent.hasError = true
+                self.parent.canGoBack = webView.canGoBack
+            }
+        }
+
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == "rossoFuocoBridge",
                   let body = message.body as? [String: Any],
