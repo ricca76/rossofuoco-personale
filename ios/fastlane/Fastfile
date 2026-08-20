@@ -70,21 +70,37 @@ platform :ios do
     )
     keychain_db = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
 
-    # 2. Gestione certificati su Apple Developer
+    # 2. Ottieni o crea certificato di distribuzione (senza revocare certificati validi a ogni esecuzione)
     begin
-      certs = Spaceship::ConnectAPI::Certificate.all
-      dist_certs = certs.select { |c| c.certificate_type.to_s.downcase.include?("distribution") || c.certificate_type.to_s.downcase.include?("ios_dist") }
-      UI.message("Apple Developer account has #{dist_certs.count} active Distribution certificates.")
-      dist_certs.each do |c|
-        UI.message("Removing stale CI certificate #{c.id}...")
-        begin
-          c.delete!
-        rescue => del_err
-          UI.important("Could not delete cert #{c.id}: #{del_err.message}")
+      get_certificates(
+        api_key: api_key,
+        development: false,
+        keychain_path: keychain_db,
+        keychain_password: keychain_password,
+        force: false
+      )
+    rescue => cert_err
+      UI.important("Certificate retrieval notice: #{cert_err.message}. Attempting renewal if limit reached...")
+      # Se il limite massimo di certificati è raggiunto, rimuovi solo il più vecchio per fare spazio
+      begin
+        certs = Spaceship::ConnectAPI::Certificate.all
+        dist_certs = certs.select { |c| c.certificate_type.to_s.downcase.include?("distribution") || c.certificate_type.to_s.downcase.include?("ios_dist") }
+        if dist_certs.count >= 2
+          oldest_cert = dist_certs.first
+          UI.message("Apple cert limit reached. Removing oldest certificate #{oldest_cert.id}...")
+          oldest_cert.delete!
         end
+      rescue => clean_err
+        UI.important("Could not clean old cert: #{clean_err.message}")
       end
-    rescue => list_err
-      UI.important("Certificate check notice: #{list_err.message}")
+
+      get_certificates(
+        api_key: api_key,
+        development: false,
+        keychain_path: keychain_db,
+        keychain_password: keychain_password,
+        force: true
+      )
     end
 
     # 3. Assicura che l'app sia registrata su App Store Connect
@@ -100,16 +116,7 @@ platform :ios do
       UI.message("App ID check: #{produce_err.message}")
     end
 
-    # 4. Genera certificato di distribuzione
-    get_certificates(
-      api_key: api_key,
-      development: false,
-      keychain_path: keychain_db,
-      keychain_password: keychain_password,
-      force: true
-    )
-
-    # 5. Ottieni provisioning profile App Store per iOS
+    # 4. Ottieni provisioning profile App Store per iOS
     get_provisioning_profile(
       api_key: api_key,
       app_identifier: bundle_id,
