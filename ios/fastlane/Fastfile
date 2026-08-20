@@ -1,7 +1,7 @@
 default_platform(:ios)
 
 platform :ios do
-  desc "Automated build and deploy to TestFlight without revoking certificates"
+  desc "Automated build and deploy to TestFlight"
   lane :beta do
     key_id = ENV["APP_STORE_CONNECT_KEY_ID"]&.strip
     issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"]&.strip
@@ -46,15 +46,18 @@ platform :ios do
     )
     keychain_db = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
 
-    # 2. Controllo intelligente certificati (NON revoca certificati attivi)
+    # 2. Pulizia certificati di distribuzione precedenti per consentire la creazione della chiave privata nel portachiavi di CI
     begin
       certs = Spaceship::ConnectAPI::Certificate.all
       dist_certs = certs.select { |c| c.certificate_type.to_s.downcase.include?("distribution") || c.certificate_type.to_s.downcase.include?("ios_dist") }
       UI.message("Apple Developer account has #{dist_certs.count} active Distribution certificates.")
-      if dist_certs.count >= 3
-        oldest_cert = dist_certs.first
-        UI.important("Certificate limit reached. Safely recycling oldest: #{oldest_cert.id}")
-        oldest_cert.delete!
+      dist_certs.each do |c|
+        UI.message("Removing stale CI certificate #{c.id} to allow pairing with local private key...")
+        begin
+          c.delete!
+        rescue => del_err
+          UI.important("Could not delete cert #{c.id}: #{del_err.message}")
+        end
       end
     rescue => list_err
       UI.important("Certificate check notice: #{list_err.message}")
@@ -73,12 +76,13 @@ platform :ios do
       UI.message("App ID check: #{produce_err.message}")
     end
 
-    # 4. Ottieni / scarica certificato di distribuzione
+    # 4. Genera certificato di distribuzione con chiave privata associata nel portachiavi locale
     get_certificates(
       api_key: api_key,
       development: false,
       keychain_path: keychain_db,
-      keychain_password: keychain_password
+      keychain_password: keychain_password,
+      force: true
     )
 
     # 5. Ottieni o genera provisioning profile App Store per iOS
@@ -148,38 +152,9 @@ platform :ios do
     )
 
     actual_ipa_path = File.join(output_dir, "RossoFuoco.ipa")
-    
-    # 8. Post-processing di conformità SDK e orientamenti nel pacchetto IPA prima del caricamento
-    if File.exist?(actual_ipa_path)
-      UI.message("Preparing IPA metadata for App Store Connect validation...")
-      temp_dir = Dir.mktmpdir("ipa_compliance_")
-      system("unzip -q '#{actual_ipa_path}' -d '#{temp_dir}'")
-      app_path = Dir.glob("#{temp_dir}/Payload/*.app").first
-      if app_path
-        app_plist = "#{app_path}/Info.plist"
-        system("plutil -convert xml1 '#{app_plist}'")
-        
-        # Aggiorna flag SDK per soddisfare i requisiti del server di convalida Apple
-        system(<<-BASH)
-          /usr/libexec/PlistBuddy -c "Set :DTPlatformVersion 26.0" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTPlatformVersion string 26.0" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.0" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.0" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTXcode 2600" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2600" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 26A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 26A100" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 26A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 26A100" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :BuildMachineOSBuild 25A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :BuildMachineOSBuild string 25A100" "#{app_plist}"
-        BASH
-        
-        system("plutil -convert binary1 '#{app_plist}'")
-        # Rifirma i file modificati
-        system("codesign -f -s 'Apple Distribution' --keychain '#{keychain_db}' '#{app_path}' 2>/dev/null || true")
-        system("cd '#{temp_dir}' && zip -qr '#{actual_ipa_path}' Payload")
-      end
-      FileUtils.rm_rf(temp_dir)
-    end
-
     UI.message("Uploading verified IPA package to TestFlight: #{actual_ipa_path}")
 
-    # 9. Carica direttamente su TestFlight
+    # 8. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       app_identifier: bundle_id,
