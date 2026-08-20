@@ -1,7 +1,7 @@
 default_platform(:ios)
 
 platform :ios do
-  desc "Push a new build to TestFlight using App Store Connect API"
+  desc "Automated build and deploy to TestFlight without revoking certificates"
   lane :beta do
     key_id = ENV["APP_STORE_CONNECT_KEY_ID"]&.strip
     issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"]&.strip
@@ -11,7 +11,7 @@ platform :ios do
     UI.user_error!("APP_STORE_CONNECT_ISSUER_ID secret is missing!") if issuer_id.nil? || issuer_id.empty?
     UI.user_error!("APP_STORE_CONNECT_API_KEY_BASE64 secret is missing!") if key_base64.nil? || key_base64.empty?
 
-    # Normalizzazione chiave PEM
+    # Normalizzazione chiave API App Store Connect
     raw_key = key_base64
     if !raw_key.include?("-----BEGIN")
       decoded = Base64.decode64(raw_key)
@@ -36,7 +36,7 @@ platform :ios do
 
     # 1. Configura Keychain temporaneo per la firma
     keychain_name = "fastlane_keychain"
-    keychain_password = "rossofuoco_temp_pass"
+    keychain_password = "rossofuoco_secure_keychain_pass"
     create_keychain(
       name: keychain_name,
       password: keychain_password,
@@ -44,26 +44,25 @@ platform :ios do
       unlock: true,
       timeout: 3600
     )
-
-    # 2. Pulizia preventiva certificati orfani
     keychain_db = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
+
+    # 2. Controllo intelligente certificati (NON revoca se non strettamente necessario)
     begin
       certs = Spaceship::ConnectAPI::Certificate.all
       dist_certs = certs.select { |c| c.certificate_type.to_s.downcase.include?("distribution") || c.certificate_type.to_s.downcase.include?("ios_dist") }
-      UI.message("Found #{dist_certs.count} existing Distribution certificates in Apple Developer account.")
-      dist_certs.each do |c|
-        UI.message("Revoking orphan certificate: #{c.id} (#{c.name}) to ensure a fresh clean slot...")
-        begin
-          c.delete!
-        rescue => del_err
-          UI.important("Could not delete cert #{c.id}: #{del_err.message}")
-        end
+      UI.message("Account Apple Developer has #{dist_certs.count} active Distribution certificates.")
+      
+      # Elimina solo se l'account ha raggiunto il limite massimo consentito da Apple (>= 3) per consentire la creazione del nuovo
+      if dist_certs.count >= 3
+        oldest_cert = dist_certs.first
+        UI.important("Max certificate limit reached. Removing oldest certificate: #{oldest_cert.id}")
+        oldest_cert.delete!
       end
     rescue => list_err
       UI.important("Certificate inspection notice: #{list_err.message}")
     end
 
-    # 3. Assicura che l'app sia registrata / creata su App Store Connect
+    # 3. Assicura che l'app sia registrata su App Store Connect
     begin
       produce(
         api_key: api_key,
@@ -73,16 +72,15 @@ platform :ios do
         skip_itc: false
       )
     rescue => produce_err
-      UI.important("Notice during App creation in App Store Connect: #{produce_err.message}")
+      UI.message("App ID check: #{produce_err.message}")
     end
 
-    # 4. Genera nuovo certificato di distribuzione con chiave privata nel portachiavi locale
+    # 4. Ottieni / genera certificato di distribuzione
     get_certificates(
       api_key: api_key,
       development: false,
       keychain_path: keychain_db,
-      keychain_password: keychain_password,
-      force: true
+      keychain_password: keychain_password
     )
 
     # 5. Ottieni o genera provisioning profile App Store per iOS
@@ -104,7 +102,7 @@ platform :ios do
       end
     end
 
-    UI.message("Using provisioning profile: #{profile_name} (UUID: #{profile_uuid}) with Team ID: #{team_id}")
+    UI.message("Using profile: #{profile_name} (UUID: #{profile_uuid}) Team: #{team_id}")
 
     # 6. Aggiorna configurazione Code Signing del progetto Xcode
     update_code_signing_settings(
@@ -124,7 +122,7 @@ platform :ios do
       )
     end
 
-    # 7. Compila e firma l'app in formato .ipa
+    # 7. Compila e firma l'app
     xcargs_params = [
       "CODE_SIGN_STYLE=Manual",
       "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
@@ -133,12 +131,16 @@ platform :ios do
     ]
     xcargs_params << "DEVELOPMENT_TEAM='#{team_id}'" if team_id && !team_id.empty?
 
+    output_dir = File.expand_path("./build-output")
+    FileUtils.mkdir_p(output_dir)
+
     build_app(
       project: "../RossoFuoco.xcodeproj",
       scheme: "RossoFuoco",
       export_method: "app-store",
       clean: true,
-      output_directory: "../build-output",
+      output_directory: output_dir,
+      output_name: "RossoFuoco.ipa",
       export_options: {
         provisioningProfiles: {
           bundle_id => profile_name
@@ -147,57 +149,14 @@ platform :ios do
       xcargs: xcargs_params.join(" ")
     )
 
-    # 8. Post-processing di conformità per TestFlight
-    ipa_path = File.expand_path("../build-output/RossoFuoco.ipa")
-    if File.exist?(ipa_path)
-      UI.message("Ensuring all orientations and compliance requirements are verified in IPA...")
-      temp_dir = Dir.mktmpdir("ipa_post_")
-      system("unzip -q '#{ipa_path}' -d '#{temp_dir}'")
-      app_path = Dir.glob("#{temp_dir}/Payload/*.app").first
-      if app_path
-        app_plist = "#{app_path}/Info.plist"
-        
-        # Convert to XML, update keys, convert back to binary
-        system("plutil -convert xml1 '#{app_plist}'")
-        
-        system(<<-CMD)
-          /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations" "#{app_plist}" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations array" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:0 string UIInterfaceOrientationPortrait" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:1 string UIInterfaceOrientationPortraitUpsideDown" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:2 string UIInterfaceOrientationLandscapeLeft" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:3 string UIInterfaceOrientationLandscapeRight" "#{app_plist}"
+    actual_ipa_path = lane_context[SharedValues::IPA_OUTPUT_PATH] || File.join(output_dir, "RossoFuoco.ipa")
+    UI.message("Verified IPA package ready at: #{actual_ipa_path}")
 
-          /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations~ipad" "#{app_plist}" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad array" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad:0 string UIInterfaceOrientationPortrait" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad:1 string UIInterfaceOrientationPortraitUpsideDown" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad:2 string UIInterfaceOrientationLandscapeLeft" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations~ipad:3 string UIInterfaceOrientationLandscapeRight" "#{app_plist}"
-
-          /usr/libexec/PlistBuddy -c "Set :UIRequiresFullScreen true" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :UIRequiresFullScreen bool true" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTPlatformVersion 26.0" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTPlatformVersion string 26.0" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.0" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.0" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTXcode 2600" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2600" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 26A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 26A100" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 26A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 26A100" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :BuildMachineOSBuild 25A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :BuildMachineOSBuild string 25A100" "#{app_plist}"
-        CMD
-        
-        system("plutil -convert binary1 '#{app_plist}'")
-        
-        # Re-sign the app bundle cleanly with distribution certificate in keychain
-        system("codesign -f -s 'Apple Distribution' --keychain '#{keychain_db}' '#{app_path}' 2>/dev/null || codesign -f -s 'Apple Distribution' '#{app_path}'")
-        system("cd '#{temp_dir}' && zip -qr '#{ipa_path}' Payload")
-      end
-      FileUtils.rm_rf(temp_dir)
-    end
-
-    # 9. Carica direttamente su TestFlight passando il file ipa modificato
+    # 8. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       app_identifier: bundle_id,
-      ipa: ipa_path,
+      ipa: actual_ipa_path,
       skip_waiting_for_build_processing: true
     )
   end
