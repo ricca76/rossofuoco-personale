@@ -16,19 +16,9 @@ targets:
         CFBundleDisplayName: "RossoFuoco"
         CFBundleIdentifier: "com.rossofuoco.personale"
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "5"
+        CFBundleVersion: "3"
         CFBundleIconName: "AppIcon"
-        UIRequiresFullScreen: true
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
     settings:
       base:

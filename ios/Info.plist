@@ -19,12 +19,12 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>3</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>L'app utilizza Face ID per proteggere l'accesso al portale del personale.</string>
@@ -39,7 +39,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>

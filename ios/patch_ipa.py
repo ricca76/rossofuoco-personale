@@ -83,6 +83,8 @@ def patch_ipa(ipa_path, keychain_db=None):
         subprocess.run(["plutil", "-convert", "xml1", plist_path], check=False)
         
         plist_commands = [
+            'Set :ITSAppUsesNonExemptEncryption false',
+            'Add :ITSAppUsesNonExemptEncryption bool false',
             'Set :DTPlatformVersion 26.0',
             'Add :DTPlatformVersion string 26.0',
             'Set :DTSDKName iphoneos26.0',
