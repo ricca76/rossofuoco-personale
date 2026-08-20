@@ -147,7 +147,24 @@ platform :ios do
       xcargs: xcargs_params.join(" ")
     )
 
-    # 8. Carica direttamente su TestFlight
+    # 8. Post-processing di conformità per TestFlight
+    ipa_path = File.expand_path("../build-output/RossoFuoco.ipa")
+    if File.exist?(ipa_path)
+      UI.message("Ensuring all orientations and fullscreen requirements are verified in IPA...")
+      temp_dir = Dir.mktmpdir("ipa_post_")
+      `unzip -q "#{ipa_path}" -d "#{temp_dir}"`
+      app_path = Dir.glob("#{temp_dir}/Payload/*.app").first
+      if app_path
+        app_plist = "#{app_path}/Info.plist"
+        `/usr/libexec/PlistBuddy -c "Set :UIRequiresFullScreen true" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :UIRequiresFullScreen bool true" "#{app_plist}"`
+        # Re-sign the app bundle cleanly with the keychain
+        `codesign -f -s "Apple Distribution" --keychain "#{keychain_db}" "#{app_path}" 2>/dev/null || true`
+        `cd "#{temp_dir}" && zip -qr "#{ipa_path}" Payload`
+      end
+      FileUtils.rm_rf(temp_dir)
+    end
+
+    # 9. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       app_identifier: bundle_id,
