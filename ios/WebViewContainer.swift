@@ -16,18 +16,53 @@ struct WebViewContainer: UIViewRepresentable {
         let configuration = WKWebViewConfiguration()
         let userContentController = WKUserContentController()
 
-        let script = WKUserScript(
+        // Inietta bridge nativo, viewport meta responsivo e blocco dell'auto-scaling sfasato
+        let setupScript = WKUserScript(
             source: """
             window.RossoFuocoNative = {
                 triggerBiometricAuth: function() {
                     window.webkit.messageHandlers.biometricHandler.postMessage('auth');
                 }
             };
+
+            (function() {
+                function applyMobileViewport() {
+                    var meta = document.querySelector('meta[name="viewport"]');
+                    if (!meta) {
+                        meta = document.createElement('meta');
+                        meta.name = 'viewport';
+                        document.head.appendChild(meta);
+                    }
+                    meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+                    
+                    var style = document.getElementById('native-screen-fix');
+                    if (!style) {
+                        style = document.createElement('style');
+                        style.id = 'native-screen-fix';
+                        style.innerHTML = `
+                            html, body {
+                                -webkit-text-size-adjust: 100% !important;
+                                text-size-adjust: 100% !important;
+                                max-width: 100vw !important;
+                                box-sizing: border-box !important;
+                            }
+                        `;
+                        if (document.head) {
+                            document.head.appendChild(style);
+                        }
+                    }
+                }
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', applyMobileViewport);
+                } else {
+                    applyMobileViewport();
+                }
+            })();
             """,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false
         )
-        userContentController.addUserScript(script)
+        userContentController.addUserScript(setupScript)
         userContentController.add(context.coordinator, name: "biometricHandler")
         configuration.userContentController = userContentController
         configuration.allowsInlineMediaPlayback = true
@@ -37,10 +72,11 @@ struct WebViewContainer: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.bounces = true
         webView.scrollView.alwaysBounceVertical = true
+        webView.scrollView.contentInsetAdjustmentBehavior = .automatic
         webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.backgroundColor = .clear
-        webView.customUserAgent = (webView.customUserAgent ?? "") + " RossoFuocoApp/1.0"
+        webView.backgroundColor = .white
+        webView.scrollView.backgroundColor = .white
+        webView.customUserAgent = (webView.customUserAgent ?? "") + " RossoFuocoApp/1.0 Mobile"
 
         // Native Pull-to-refresh
         let refreshControl = UIRefreshControl()
