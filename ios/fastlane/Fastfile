@@ -1,7 +1,7 @@
 default_platform(:ios)
 
 platform :ios do
-  desc "Automated build and deploy to TestFlight"
+  desc "Automated native build and deploy to TestFlight"
   lane :beta do
     key_id = ENV["APP_STORE_CONNECT_KEY_ID"]&.strip
     issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"]&.strip
@@ -34,7 +34,7 @@ platform :ios do
     bundle_id = "com.rossofuoco.personale"
     app_title = "RossoFuoco"
 
-    # Auto-increment build number directly from TestFlight / CI
+    # Incremento dinamico della build da TestFlight
     latest_build = nil
     begin
       latest_build = latest_testflight_build_number(
@@ -47,8 +47,15 @@ platform :ios do
     end
 
     github_run = ENV["GITHUB_RUN_NUMBER"]&.to_i || 0
-    next_build_number = [(latest_build.to_i + 1), (github_run > 0 ? github_run : 6), 6].max
+    next_build_number = [(latest_build.to_i + 1), (github_run > 0 ? github_run : 7), 7].max
     UI.message("Resolved Next CFBundleVersion / Build Number: #{next_build_number} (Latest on TestFlight: #{latest_build.inspect})")
+
+    # Aggiorna plist nativo prima della compilazione Xcode
+    info_plist_path = File.expand_path("../ios/Info.plist")
+    if File.exist?(info_plist_path)
+      system("/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion #{next_build_number}' '#{info_plist_path}'") rescue nil
+      system("/usr/libexec/PlistBuddy -c 'Set :ITSAppUsesNonExemptEncryption false' '#{info_plist_path}'") rescue nil
+    end
 
     # 1. Configura Keychain temporaneo per la firma
     keychain_name = "fastlane_keychain"
@@ -140,7 +147,7 @@ platform :ios do
       )
     end
 
-    # 7. Compila e firma l'app nativa
+    # 7. Compila e firma l'app nativa con Xcode
     xcargs_params = [
       "CODE_SIGN_STYLE=Manual",
       "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
@@ -171,16 +178,8 @@ platform :ios do
     actual_ipa_path = File.join(output_dir, "RossoFuoco.ipa")
     UI.message("Native build complete. Package: #{actual_ipa_path}")
 
-    # 8. Post-processing IPA con patch Mach-O e Info.plist per i validatori App Store Connect
-    patch_script = File.expand_path("../patch_ipa.py")
-    if File.exist?(patch_script) && File.exist?(actual_ipa_path)
-      UI.message("Running Python binary and metadata patcher with build #{next_build_number}...")
-      system("python3 '#{patch_script}' '#{actual_ipa_path}' '#{keychain_db}' '#{next_build_number}'")
-    end
-
-    UI.message("Uploading patched IPA package to TestFlight: #{actual_ipa_path}")
-
-    # 9. Carica direttamente su TestFlight
+    # 8. Carica direttamente su TestFlight (senza patch binaria distruttiva)
+    UI.message("Uploading pure native IPA package to TestFlight: #{actual_ipa_path}")
     upload_to_testflight(
       api_key: api_key,
       app_identifier: bundle_id,
