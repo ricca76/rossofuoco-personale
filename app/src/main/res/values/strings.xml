@@ -1,3 +1,15 @@
 <resources>
-    <string name="app_name">RossoFuoco</string>
+    <string name="app_name">RossoFuoco Personale</string>
+    <string name="title_rossofuoco">RossoFuoco</string>
+    <string name="subtitle_personale">Portale del Personale</string>
+    <string name="biometric_title">Autenticazione RossoFuoco</string>
+    <string name="biometric_subtitle">Accedi con impronta o riconoscimento facciale</string>
+    <string name="biometric_negative">Usa credenziali portale</string>
+    <string name="loading_portal">Caricamento portale in corso...</string>
+    <string name="error_loading">Impossibile caricare il portale</string>
+    <string name="retry">Riprova</string>
+    <string name="refresh">Aggiorna</string>
+    <string name="home">Home</string>
+    <string name="back">Indietro</string>
+    <string name="forward">Avanti</string>
 </resources>

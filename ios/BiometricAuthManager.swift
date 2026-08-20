@@ -2,70 +2,49 @@ import Foundation
 import LocalAuthentication
 
 class BiometricAuthManager: ObservableObject {
-    @Published var isUnlocked: Bool = false
-    @Published var authError: String? = nil
-    @Published var isAuthenticating: Bool = false
+    @Published var isAuthenticated = false
+    @Published var biometricTypeString: String = "Biometria"
 
-    func authenticate(completion: ((Bool) -> Void)? = nil) {
-        guard !isAuthenticating else { return }
-        
+    init() {
+        checkBiometryType()
+    }
+
+    func checkBiometryType() {
         let context = LAContext()
-        context.localizedCancelTitle = "Annulla"
-        context.localizedFallbackTitle = "Usa Codice PIN"
-        
         var error: NSError?
-        let canEvaluateBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
-
-        if canEvaluateBiometrics {
-            self.isAuthenticating = true
-            let reason = "Autenticati con Face ID o Touch ID per accedere a RossoFuoco Personale"
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { [weak self] success, evalError in
-                DispatchQueue.main.async {
-                    self?.isAuthenticating = false
-                    if success {
-                        self?.isUnlocked = true
-                        self?.authError = nil
-                        completion?(true)
-                    } else if let laError = evalError as? LAError, laError.code == .userFallback {
-                        self?.fallbackToPasscode(completion: completion)
-                    } else {
-                        self?.authError = "Autenticazione non riuscita. Tocca per riprovare."
-                        completion?(false)
-                    }
-                }
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            switch context.biometryType {
+            case .faceID:
+                biometricTypeString = "Face ID"
+            case .touchID:
+                biometricTypeString = "Touch ID"
+            case .opticID:
+                biometricTypeString = "Optic ID"
+            default:
+                biometricTypeString = "Biometria"
             }
-        } else {
-            // Se la biometria non è disponibile o configurata, prova con il passcode del dispositivo
-            fallbackToPasscode(completion: completion)
         }
     }
 
-    private func fallbackToPasscode(completion: ((Bool) -> Void)? = nil) {
+    func authenticate(completion: @escaping (Bool) -> Void) {
         let context = LAContext()
+        context.localizedCancelTitle = "Annulla"
+        context.localizedFallbackTitle = "Usa Codice"
+
         var error: NSError?
-        
+        let reason = "Accedi al Portale del Personale RossoFuoco"
+
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
-            self.isAuthenticating = true
-            let reason = "Inserisci il codice di sblocco per accedere a RossoFuoco Personale"
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { [weak self] success, evalError in
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, _ in
                 DispatchQueue.main.async {
-                    self?.isAuthenticating = false
-                    if success {
-                        self?.isUnlocked = true
-                        self?.authError = nil
-                        completion?(true)
-                    } else {
-                        self?.authError = "Autenticazione richiesta per accedere."
-                        completion?(false)
-                    }
+                    self.isAuthenticated = success
+                    completion(success)
                 }
             }
         } else {
-            // Nessun meccanismo di sicurezza sul dispositivo: sblocca direttamente
             DispatchQueue.main.async {
-                self.isUnlocked = true
-                self.authError = nil
-                completion?(true)
+                self.isAuthenticated = true
+                completion(true)
             }
         }
     }

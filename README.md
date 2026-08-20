@@ -1,1 +1,0 @@
-# RossoFuoco Personale - Android & iOS

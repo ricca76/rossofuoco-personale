@@ -1,13 +1,14 @@
 name: Deploy iOS App to TestFlight
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ "main" ]
-    paths:
-      - 'ios/**'
-      - '.github/workflows/deploy-testflight.yml'
-      - 'project.yml'
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-testflight-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy-testflight:
@@ -38,11 +39,10 @@ jobs:
         run: gem install fastlane --no-document
 
       - name: Deploy to TestFlight via Fastlane
+        working-directory: ios
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD || 'RossoFuocoPass2026' }}
-        run: |
-          cd ios
-          fastlane beta
+          FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: "120"
+        run: fastlane beta

@@ -1,147 +1,127 @@
 import SwiftUI
-import WebKit
 
 struct ContentView: View {
     @StateObject private var authManager = BiometricAuthManager()
     @State private var isLoading = true
-    @State private var hasError = false
     @State private var canGoBack = false
-    @State private var webView: WKWebView? = nil
-    
-    private let targetURL = URL(string: "https://rossofuoco.eu/personale/")!
-    private let primaryColor = Color(red: 0.88, green: 0.27, blue: 0.18) // #E0452E
-    private let darkBackground = Color(red: 0.08, green: 0.07, blue: 0.06) // #141210
+    @State private var canGoForward = false
+    @State private var reloadTrigger = false
+
+    private let portalURL = URL(string: "https://rossofuoco.eu/personale/")!
+    private let rossoColor = Color(red: 211/255, green: 47/255, blue: 47/255)
 
     var body: some View {
         ZStack {
-            darkBackground
-                .ignoresSafeArea()
-
-            if authManager.isUnlocked {
-                // Vista Principale
-                VStack(spacing: 0) {
-                    if isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: primaryColor))
-                            .scaleEffect(1.2)
-                            .frame(height: 36)
-                            .padding(.top, 4)
-                    }
-
-                    if hasError {
-                        // Vista Errore Connessione
-                        VStack(spacing: 16) {
-                            Spacer()
-
-                            Image(systemName: "wifi.slash")
-                                .font(.system(size: 50))
-                                .foregroundColor(primaryColor)
-
-                            Text("Impossibile caricare il portale")
-                                .font(.headline)
-                                .foregroundColor(.white)
-
-                            Text("Verifica la connessione internet e tocca Ricarica.")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-
-                            Button(action: {
-                                hasError = false
-                                isLoading = true
-                                webView?.reload()
-                            }) {
-                                HStack {
-                                    Image(systemName: "arrow.clockwise")
-                                    Text("Ricarica Pagina")
-                                        .fontWeight(.semibold)
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 12)
-                                .background(primaryColor)
-                                .cornerRadius(10)
-                            }
-                            .padding(.top, 8)
-
-                            Spacer()
-                        }
-                    } else {
-                        WebViewContainer(
-                            url: targetURL,
-                            isLoading: $isLoading,
-                            canGoBack: $canGoBack,
-                            hasError: $hasError,
-                            webViewReference: $webView
-                        )
-                        .ignoresSafeArea(.all, edges: .all)
-                    }
-                }
-            } else {
-                // Schermata di blocco biometrico
-                VStack(spacing: 24) {
-                    Spacer()
-
+            VStack(spacing: 0) {
+                // Header Bar
+                HStack(spacing: 12) {
                     ZStack {
-                        Circle()
-                            .fill(Color(red: 0.16, green: 0.10, blue: 0.08))
-                            .frame(width: 100, height: 100)
-
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.white)
+                            .frame(width: 34, height: 34)
                         Image(systemName: "flame.fill")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 52, height: 52)
-                            .foregroundColor(primaryColor)
+                            .font(.system(size: 20))
+                            .foregroundColor(rossoColor)
                     }
 
-                    Text("RossoFuoco Personale")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-
-                    Text("Accesso protetto. Autenticati con Face ID o codice per accedere al portale.")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-
-                    if let error = authManager.authError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("RossoFuoco")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("Portale del Personale")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.85))
                     }
 
                     Spacer()
 
                     Button(action: {
-                        authManager.authenticate()
+                        reloadTrigger = true
                     }) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "faceid")
-                                .font(.title3)
-                            Text("Sblocca Portale")
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(primaryColor)
-                        .cornerRadius(14)
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
                     }
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 40)
+
+                    Button(action: {
+                        authManager.authenticate { _ in }
+                    }) {
+                        Image(systemName: authManager.biometricTypeString.contains("Face") ? "faceid" : "touchid")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(rossoColor)
+
+                // Loading Indicator
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(LinearProgressViewStyle(tint: rossoColor))
+                        .frame(height: 2)
+                }
+
+                // Web Content
+                WebViewContainer(
+                    url: portalURL,
+                    isLoading: $isLoading,
+                    canGoBack: $canGoBack,
+                    canGoForward: $canGoForward,
+                    reloadTrigger: $reloadTrigger,
+                    onBiometricRequested: {
+                        authManager.authenticate { _ in }
+                    }
+                )
+
+                // Bottom Navigation
+                HStack {
+                    Button(action: {
+                        // Back action
+                    }) {
+                        Image(systemName: "chevron.backward")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(canGoBack ? rossoColor : Color.gray.opacity(0.4))
+                            .frame(width: 44, height: 44)
+                    }
+                    .disabled(!canGoBack)
+
+                    Button(action: {
+                        // Forward action
+                    }) {
+                        Image(systemName: "chevron.forward")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(canGoForward ? rossoColor : Color.gray.opacity(0.4))
+                            .frame(width: 44, height: 44)
+                    }
+                    .disabled(!canGoForward)
+
+                    Spacer()
+
+                    Button(action: {
+                        reloadTrigger = true
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "house.fill")
+                                .font(.system(size: 14))
+                            Text("Home")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(rossoColor.opacity(0.12))
+                        .foregroundColor(rossoColor)
+                        .cornerRadius(20)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(Color(UIColor.systemBackground))
+                .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: -2)
             }
         }
-        .onAppear {
-            authManager.authenticate()
-        }
+        .edgesIgnoringSafeArea(.bottom)
     }
-}
-
-#Preview {
-    ContentView()
 }

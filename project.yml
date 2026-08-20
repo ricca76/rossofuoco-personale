@@ -3,6 +3,19 @@ options:
   bundleIdPrefix: com.rossofuoco
   deploymentTarget:
     iOS: "16.0"
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    PRODUCT_BUNDLE_IDENTIFIER: com.rossofuoco.personale
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Manual
+    CURRENT_PROJECT_VERSION: 8
+    MARKETING_VERSION: 1.0.0
+    GENERATE_INFOPLIST_FILE: NO
+    INFOPLIST_FILE: ios/Info.plist
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
 targets:
   RossoFuoco:
     type: application
@@ -10,24 +23,14 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: ios
+        excludes:
+          - "**/*.plist"
+          - "fastlane/**"
+          - "README.md"
     info:
       path: ios/Info.plist
-      properties:
-        CFBundleDisplayName: "RossoFuoco"
-        CFBundleIdentifier: "com.rossofuoco.personale"
-        CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "6"
-        CFBundleIconName: "AppIcon"
-        ITSAppUsesNonExemptEncryption: false
-        UIRequiresFullScreen: true
-        UILaunchScreen: {}
     settings:
       base:
+        PRODUCT_NAME: RossoFuoco
         PRODUCT_BUNDLE_IDENTIFIER: com.rossofuoco.personale
-        CODE_SIGN_STYLE: Manual
-        SWIFT_VERSION: "5.9"
-        GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: ios/Info.plist
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        TARGETED_DEVICE_FAMILY: "1,2"
-        INFOPLIST_KEY_UIRequiresFullScreen: YES
