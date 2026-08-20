@@ -34,6 +34,25 @@ platform :ios do
     bundle_id = "com.rossofuoco.personale"
     app_title = "RossoFuoco"
 
+    # Recupera l'ultimo numero di build presente su TestFlight e incrementalo
+    current_build_number = 1
+    begin
+      latest_build = latest_testflight_build_number(
+        api_key: api_key,
+        app_identifier: bundle_id
+      )
+      current_build_number = latest_build.to_i + 1
+      UI.message("Latest TestFlight build number was #{latest_build}. Setting new build number to #{current_build_number}")
+    rescue => tf_err
+      UI.important("Could not fetch latest build number (#{tf_err.message}), using fallback increment")
+      current_build_number = 6
+    end
+
+    increment_build_number(
+      xcodeproj: "../RossoFuoco.xcodeproj",
+      build_number: current_build_number.to_s
+    )
+
     # 1. Configura Keychain temporaneo per la firma
     keychain_name = "fastlane_keychain"
     keychain_password = "rossofuoco_secure_keychain_pass"
