@@ -11,7 +11,6 @@ def patch_macho_file(file_path, target_sdk_major=26):
     try:
         with open(file_path, 'rb') as f:
             data = bytearray(f.read())
-
         if len(data) < 32:
             return False
 
@@ -54,7 +53,7 @@ def patch_macho_file(file_path, target_sdk_major=26):
         print(f"Error patching Mach-O {file_path}: {e}")
         return False
 
-def patch_ipa(ipa_path, keychain_db=None):
+def patch_ipa(ipa_path, keychain_db=None, build_number=None):
     if not os.path.exists(ipa_path):
         print(f"IPA not found at: {ipa_path}")
         return False
@@ -100,10 +99,12 @@ def patch_ipa(ipa_path, keychain_db=None):
             'Set :BuildMachineOSBuild 25A100',
             'Add :BuildMachineOSBuild string 25A100'
         ]
+
+        if build_number:
+            plist_commands.append(f'Set :CFBundleVersion {build_number}')
+            plist_commands.append(f'Add :CFBundleVersion string {build_number}')
         
         for cmd in plist_commands:
-            action = cmd.split()[0]
-            key = cmd.split()[1]
             subprocess.run(['/usr/libexec/PlistBuddy', '-c', cmd, plist_path], capture_output=True)
 
         subprocess.run(["plutil", "-convert", "binary1", plist_path], check=False)
@@ -115,7 +116,6 @@ def patch_ipa(ipa_path, keychain_db=None):
                 fpath = os.path.join(root, file)
                 if os.path.islink(fpath):
                     continue
-                # If executable or .dylib or framework binary
                 patch_macho_file(fpath, target_sdk_major=26)
 
         # Re-sign code
@@ -128,7 +128,6 @@ def patch_ipa(ipa_path, keychain_db=None):
         res = subprocess.run(sign_cmd, capture_output=True, text=True)
         if res.returncode != 0:
             print(f"Code signing warning: {res.stderr}")
-            # Retry without keychain flag if failed
             subprocess.run(["codesign", "-f", "-s", "Apple Distribution", "--preserve-metadata=identifier,entitlements", app_dir], check=False)
 
         # Re-create the IPA zip
@@ -144,16 +143,16 @@ def patch_ipa(ipa_path, keychain_db=None):
 
         print("IPA successfully patched and ready for App Store Connect!")
         return True
-
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: patch_ipa.py <path_to_ipa> [keychain_db_path]")
+        print("Usage: patch_ipa.py <path_to_ipa> [keychain_db_path] [build_number]")
         sys.exit(1)
-    
+        
     ipa = sys.argv[1]
-    kc = sys.argv[2] if len(sys.argv) > 2 else None
-    success = patch_ipa(ipa, kc)
+    kc = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] != "" else None
+    bn = sys.argv[3] if len(sys.argv) > 3 else None
+    success = patch_ipa(ipa, kc, bn)
     sys.exit(0 if success else 1)

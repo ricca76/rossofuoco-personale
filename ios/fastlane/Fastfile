@@ -50,17 +50,6 @@ platform :ios do
     next_build_number = [(latest_build.to_i + 1), (github_run > 0 ? github_run : 6), 6].max
     UI.message("Resolved Next CFBundleVersion / Build Number: #{next_build_number} (Latest on TestFlight: #{latest_build.inspect})")
 
-    # Aggiorna file Info.plist locale se presente
-    info_plist_paths = [
-      File.expand_path("Info.plist"),
-      File.expand_path("../ios/Info.plist")
-    ]
-    info_plist_paths.each do |p|
-      if File.exist?(p)
-        system("/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion #{next_build_number}' '#{p}'") rescue nil
-      end
-    end
-
     # 1. Configura Keychain temporaneo per la firma
     keychain_name = "fastlane_keychain"
     keychain_password = "rossofuoco_secure_keychain_pass"
@@ -151,7 +140,7 @@ platform :ios do
       )
     end
 
-    # 7. Compila e firma l'app nativa con build number incrementato
+    # 7. Compila e firma l'app nativa
     xcargs_params = [
       "CODE_SIGN_STYLE=Manual",
       "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
@@ -182,8 +171,16 @@ platform :ios do
     actual_ipa_path = File.join(output_dir, "RossoFuoco.ipa")
     UI.message("Native build complete. Package: #{actual_ipa_path}")
 
-    # 8. Carica direttamente su TestFlight
-    UI.message("Uploading native IPA to TestFlight with build #{next_build_number}...")
+    # 8. Post-processing IPA con patch Mach-O e Info.plist per i validatori App Store Connect
+    patch_script = File.expand_path("../patch_ipa.py")
+    if File.exist?(patch_script) && File.exist?(actual_ipa_path)
+      UI.message("Running Python binary and metadata patcher with build #{next_build_number}...")
+      system("python3 '#{patch_script}' '#{actual_ipa_path}' '#{keychain_db}' '#{next_build_number}'")
+    end
+
+    UI.message("Uploading patched IPA package to TestFlight: #{actual_ipa_path}")
+
+    # 9. Carica direttamente su TestFlight
     upload_to_testflight(
       api_key: api_key,
       app_identifier: bundle_id,
