@@ -29,28 +29,25 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.11.1'
 
-      - name: Setup Android Keystore (if provided)
-        id: keystore
+      - name: Build Release Bundle (AAB) & APK
         run: |
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "Decoding Keystore from secret..."
-            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > /tmp/release.keystore
-            echo "has_keystore=true" >> $GITHUB_OUTPUT
-          else
-            echo "No custom keystore found in secrets, using debug/standard signing"
-            echo "has_keystore=false" >> $GITHUB_OUTPUT
-          fi
+          gradle :app:bundleRelease :app:assembleRelease --stacktrace
 
-      - name: Build Release Bundle (AAB)
-        run: |
-          ./gradlew :app:bundleRelease
-
-      - name: Upload App Bundle Artifact
+      - name: Upload App Bundle Artifact (AAB)
         uses: actions/upload-artifact@v4
         with:
           name: RossoFuoco-Release-AAB
           path: app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RossoFuoco-Release-APK
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 30
 
       - name: Upload to Google Play Internal Sharing / Track (if API JSON key exists)
