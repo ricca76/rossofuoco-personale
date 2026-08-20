@@ -47,8 +47,8 @@ platform :ios do
     end
 
     github_run = ENV["GITHUB_RUN_NUMBER"]&.to_i || 0
-    # Assicura un numero di build superiore a 36 (es. 45+)
-    next_build_number = [(latest_build.to_i + 1), (github_run > 0 ? (github_run + 10) : 45), 45].max
+    # Assicura un numero di build superiore a tutte le precedenti (es. 55+)
+    next_build_number = [(latest_build.to_i + 1), (github_run > 0 ? (github_run + 10) : 55), 55].max
     UI.message("Resolved Next CFBundleVersion / Build Number: #{next_build_number} (Latest on TestFlight: #{latest_build.inspect})")
 
     # Aggiorna plist nativo prima della compilazione Xcode

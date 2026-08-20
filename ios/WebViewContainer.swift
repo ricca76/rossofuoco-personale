@@ -4,13 +4,8 @@ import WebKit
 struct WebViewContainer: UIViewRepresentable {
     let url: URL
     @Binding var isLoading: Bool
-    @Binding var canGoBack: Bool
-    @Binding var canGoForward: Bool
-    @Binding var reloadTrigger: Bool
-    @Binding var backTrigger: Bool
-    @Binding var forwardTrigger: Bool
-    @Binding var homeTrigger: Bool
     @Binding var hasError: Bool
+    @Binding var reloadTrigger: Bool
     var onBiometricRequested: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
@@ -35,15 +30,26 @@ struct WebViewContainer: UIViewRepresentable {
         userContentController.addUserScript(script)
         userContentController.add(context.coordinator, name: "biometricHandler")
         configuration.userContentController = userContentController
+        configuration.allowsInlineMediaPlayback = true
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.bounces = true
+        webView.scrollView.alwaysBounceVertical = true
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
         webView.customUserAgent = (webView.customUserAgent ?? "") + " RossoFuocoApp/1.0"
 
+        // Native Pull-to-refresh
+        let refreshControl = UIRefreshControl()
+        refreshControl.addTarget(context.coordinator, action: #selector(Coordinator.handleRefreshControl(sender:)), for: .valueChanged)
+        refreshControl.tintColor = UIColor(red: 211/255, green: 47/255, blue: 47/255, alpha: 1.0)
+        webView.scrollView.refreshControl = refreshControl
+
         context.coordinator.webView = webView
-        let request = URLRequest(url: url)
+        let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 30)
         webView.load(request)
         return webView
     }
@@ -55,28 +61,6 @@ struct WebViewContainer: UIViewRepresentable {
                 self.reloadTrigger = false
             }
         }
-        if backTrigger {
-            if uiView.canGoBack {
-                uiView.goBack()
-            }
-            DispatchQueue.main.async {
-                self.backTrigger = false
-            }
-        }
-        if forwardTrigger {
-            if uiView.canGoForward {
-                uiView.goForward()
-            }
-            DispatchQueue.main.async {
-                self.forwardTrigger = false
-            }
-        }
-        if homeTrigger {
-            uiView.load(URLRequest(url: url))
-            DispatchQueue.main.async {
-                self.homeTrigger = false
-            }
-        }
     }
 
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
@@ -85,6 +69,13 @@ struct WebViewContainer: UIViewRepresentable {
 
         init(_ parent: WebViewContainer) {
             self.parent = parent
+        }
+
+        @objc func handleRefreshControl(sender: UIRefreshControl) {
+            webView?.reload()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                sender.endRefreshing()
+            }
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -104,8 +95,7 @@ struct WebViewContainer: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
                 self.parent.hasError = false
-                self.parent.canGoBack = webView.canGoBack
-                self.parent.canGoForward = webView.canGoForward
+                webView.scrollView.refreshControl?.endRefreshing()
             }
         }
 
@@ -113,6 +103,7 @@ struct WebViewContainer: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
                 self.parent.hasError = true
+                webView.scrollView.refreshControl?.endRefreshing()
             }
         }
 
@@ -120,6 +111,7 @@ struct WebViewContainer: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
                 self.parent.hasError = true
+                webView.scrollView.refreshControl?.endRefreshing()
             }
         }
     }
