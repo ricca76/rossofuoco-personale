@@ -47,15 +47,24 @@ platform :ios do
     end
 
     github_run = ENV["GITHUB_RUN_NUMBER"]&.to_i || 0
-    # Assicura un numero di build superiore a tutte le build precedenti (es. 40+)
-    next_build_number = [(latest_build.to_i + 1), (github_run > 0 ? (github_run + 10) : 40), 40].max
+    # Assicura un numero di build superiore a 36 (es. 45+)
+    next_build_number = [(latest_build.to_i + 1), (github_run > 0 ? (github_run + 10) : 45), 45].max
     UI.message("Resolved Next CFBundleVersion / Build Number: #{next_build_number} (Latest on TestFlight: #{latest_build.inspect})")
 
     # Aggiorna plist nativo prima della compilazione Xcode
-    info_plist_path = File.expand_path("../ios/Info.plist")
-    if File.exist?(info_plist_path)
-      system("/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion #{next_build_number}' '#{info_plist_path}'") rescue nil
-      system("/usr/libexec/PlistBuddy -c 'Set :ITSAppUsesNonExemptEncryption false' '#{info_plist_path}'") rescue nil
+    [
+      File.expand_path("../Info.plist"),
+      File.expand_path("Info.plist"),
+      File.expand_path("../ios/Info.plist"),
+      File.expand_path("../../ios/Info.plist"),
+      "Info.plist",
+      "ios/Info.plist"
+    ].each do |plist_file|
+      if File.exist?(plist_file)
+        UI.message("Updating CFBundleVersion in #{plist_file} to #{next_build_number}")
+        system("/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion #{next_build_number}' '#{plist_file}'") rescue nil
+        system("/usr/libexec/PlistBuddy -c 'Set :ITSAppUsesNonExemptEncryption false' '#{plist_file}'") rescue nil
+      end
     end
 
     # 1. Configura Keychain temporaneo per la firma
@@ -153,6 +162,15 @@ platform :ios do
         path: "../RossoFuoco.xcodeproj",
         teamid: team_id
       )
+    end
+
+    begin
+      increment_build_number(
+        xcodeproj: "../RossoFuoco.xcodeproj",
+        build_number: next_build_number.to_s
+      )
+    rescue => inc_err
+      UI.important("Notice increment_build_number: #{inc_err.message}")
     end
 
     # 7. Compila e firma l'app nativa con Xcode
