@@ -34,28 +34,32 @@ platform :ios do
     bundle_id = "com.rossofuoco.personale"
     app_title = "RossoFuoco"
 
-    # Calcola un numero di build univoco e strettamente crescente
-    # Supporta anche github.run_number passato come env var o calcolato da timestamp
-    env_run_number = ENV["GITHUB_RUN_NUMBER"] ? (ENV["GITHUB_RUN_NUMBER"].to_i + 10) : nil
-    time_build_number = Time.now.strftime("%y%m%d%H%M").to_i
-    
-    current_build_number = 10
+    # Auto-increment build number directly from TestFlight / CI
+    latest_build = nil
     begin
       latest_build = latest_testflight_build_number(
         api_key: api_key,
-        app_identifier: bundle_id
+        app_identifier: bundle_id,
+        version: "1.0.0"
       )
-      current_build_number = [latest_build.to_i + 2, env_run_number || 10, 10].max
-      UI.message("Latest TestFlight build number was #{latest_build}. Setting new build number to #{current_build_number}")
     rescue => tf_err
-      UI.important("Could not fetch latest build number (#{tf_err.message}), using fallback")
-      current_build_number = [env_run_number || 10, 10].max
+      UI.important("Could not fetch latest TestFlight build number: #{tf_err.message}")
     end
 
-    increment_build_number(
-      xcodeproj: "../RossoFuoco.xcodeproj",
-      build_number: current_build_number.to_s
-    )
+    github_run = ENV["GITHUB_RUN_NUMBER"]&.to_i || 0
+    next_build_number = [(latest_build.to_i + 1), (github_run > 0 ? github_run : 6), 6].max
+    UI.message("Resolved Next CFBundleVersion / Build Number: #{next_build_number} (Latest on TestFlight: #{latest_build.inspect})")
+
+    # Aggiorna file Info.plist locale se presente
+    info_plist_paths = [
+      File.expand_path("Info.plist"),
+      File.expand_path("../ios/Info.plist")
+    ]
+    info_plist_paths.each do |p|
+      if File.exist?(p)
+        system("/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion #{next_build_number}' '#{p}'") rescue nil
+      end
+    end
 
     # 1. Configura Keychain temporaneo per la firma
     keychain_name = "fastlane_keychain"
@@ -147,12 +151,13 @@ platform :ios do
       )
     end
 
-    # 7. Compila e firma l'app nativa
+    # 7. Compila e firma l'app nativa con build number incrementato
     xcargs_params = [
       "CODE_SIGN_STYLE=Manual",
       "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
       "PROVISIONING_PROFILE='#{profile_uuid}'",
-      "CODE_SIGN_IDENTITY='Apple Distribution'"
+      "CODE_SIGN_IDENTITY='Apple Distribution'",
+      "CURRENT_PROJECT_VERSION=#{next_build_number}"
     ]
     xcargs_params << "DEVELOPMENT_TEAM='#{team_id}'" if team_id && !team_id.empty?
 
@@ -178,7 +183,7 @@ platform :ios do
     UI.message("Native build complete. Package: #{actual_ipa_path}")
 
     # 8. Carica direttamente su TestFlight
-    UI.message("Uploading native IPA to TestFlight...")
+    UI.message("Uploading native IPA to TestFlight with build #{next_build_number}...")
     upload_to_testflight(
       api_key: api_key,
       app_identifier: bundle_id,
