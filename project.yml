@@ -16,7 +16,7 @@ targets:
         CFBundleDisplayName: "RossoFuoco"
         CFBundleIdentifier: "com.rossofuoco.personale"
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "6"
+        CFBundleVersion: "10"
         CFBundleIconName: "AppIcon"
         ITSAppUsesNonExemptEncryption: false
         UIRequiresFullScreen: true
