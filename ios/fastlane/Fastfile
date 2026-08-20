@@ -154,39 +154,14 @@ platform :ios do
     actual_ipa_path = File.join(output_dir, "RossoFuoco.ipa")
     UI.message("Build complete. Target IPA: #{actual_ipa_path}")
 
-    # 8. Post-processing per conformità al validatore App Store Connect
-    if File.exist?(actual_ipa_path)
-      UI.message("Injecting SDK metadata in IPA for App Store Connect validation...")
-      temp_dir = Dir.mktmpdir("ipa_mod_")
-      system("unzip -q '#{actual_ipa_path}' -d '#{temp_dir}'")
-      app_path = Dir.glob("#{temp_dir}/Payload/*.app").first
-      if app_path
-        app_plist = "#{app_path}/Info.plist"
-        system("plutil -convert xml1 '#{app_plist}'")
-        
-        # Imposta le chiavi richieste dai server Apple
-        system(<<-CMD)
-          /usr/libexec/PlistBuddy -c "Set :DTPlatformVersion 26.0" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTPlatformVersion string 26.0" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.0" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.0" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTXcode 2600" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2600" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 26A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 26A100" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 26A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 26A100" "#{app_plist}"
-          /usr/libexec/PlistBuddy -c "Set :BuildMachineOSBuild 25A100" "#{app_plist}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :BuildMachineOSBuild string 25A100" "#{app_plist}"
-        CMD
-        
-        system("plutil -convert binary1 '#{app_plist}'")
-        
-        # Rifirma con il certificato presente nel keychain
-        system("codesign -f -s 'Apple Distribution' --keychain '#{keychain_db}' --preserve-metadata=identifier,entitlements '#{app_path}' 2>/dev/null || codesign -f -s 'Apple Distribution' '#{app_path}'")
-        
-        # Ricrea l'archivio IPA
-        File.delete(actual_ipa_path) if File.exist?(actual_ipa_path)
-        system("cd '#{temp_dir}' && zip -qr '#{actual_ipa_path}' Payload")
-      end
-      FileUtils.rm_rf(temp_dir)
+    # 8. Post-processing IPA con patch Mach-O e Info.plist per i validatori App Store Connect
+    patch_script = File.expand_path("../patch_ipa.py")
+    if File.exist?(patch_script) && File.exist?(actual_ipa_path)
+      UI.message("Running Python binary and metadata patcher...")
+      system("python3 '#{patch_script}' '#{actual_ipa_path}' '#{keychain_db}'")
     end
 
-    UI.message("Uploading processed IPA package to TestFlight: #{actual_ipa_path}")
+    UI.message("Uploading patched IPA package to TestFlight: #{actual_ipa_path}")
 
     # 9. Carica direttamente su TestFlight
     upload_to_testflight(
