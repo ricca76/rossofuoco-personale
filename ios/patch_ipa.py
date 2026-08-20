@@ -85,6 +85,8 @@ def patch_ipa(ipa_path, keychain_db=None):
         plist_commands = [
             'Set :ITSAppUsesNonExemptEncryption false',
             'Add :ITSAppUsesNonExemptEncryption bool false',
+            'Set :UIRequiresFullScreen true',
+            'Add :UIRequiresFullScreen bool true',
             'Set :DTPlatformVersion 26.0',
             'Add :DTPlatformVersion string 26.0',
             'Set :DTSDKName iphoneos26.0',
