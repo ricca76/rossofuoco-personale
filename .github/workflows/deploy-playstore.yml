@@ -50,10 +50,21 @@ jobs:
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 30
 
-      - name: Upload to Google Play Internal Sharing / Track (if API JSON key exists)
-        if: env.PLAY_CONFIG_JSON != ''
+      - name: Check for Google Play Credentials
+        id: check_creds
         env:
-          PLAY_CONFIG_JSON: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          PLAY_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+        run: |
+          if [ -n "$PLAY_KEY" ]; then
+            echo "has_key=true" >> $GITHUB_OUTPUT
+            echo "Google Play Service Account key found in repository secrets."
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "Google Play Service Account key NOT configured yet."
+          fi
+
+      - name: Upload to Google Play Internal Sharing / Track
+        if: steps.check_creds.outputs.has_key == 'true'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
@@ -61,3 +72,18 @@ jobs:
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           track: internal
           status: completed
+
+      - name: Write Job Summary
+        run: |
+          echo "## 🤖 Android Build & Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Status | Download Location |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Android App Bundle (AAB)** | ✅ Compiled | Download from *Artifacts* -> \`RossoFuoco-Release-AAB\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Android APK** | ✅ Compiled | Download from *Artifacts* -> \`RossoFuoco-Release-APK\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check_creds.outputs.has_key }}" == "true" ]; then
+            echo "🚀 **Google Play Auto-Deploy:** Release uploaded directly to Google Play Internal Testing track!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ **Manual Play Console Upload:** To publish or update test tracks, download \`RossoFuoco-Release-AAB\` above and upload it to [Google Play Console](https://play.google.com/console) under *Test interni*." >> $GITHUB_STEP_SUMMARY
+          fi
