@@ -49,9 +49,9 @@ workflows:
             --scheme "$XCODE_SCHEME" \
             --archive-flags="-destination 'generic/platform=iOS'"
     artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-      - *.dSYM.zip
+      - "build/ios/ipa/*.ipa"
+      - "/tmp/xcodebuild_logs/*.log"
+      - "*.dSYM.zip"
     publishing:
       email:
         recipients:
@@ -90,8 +90,8 @@ workflows:
         script: |
           gradle :app:bundleRelease :app:assembleRelease --stacktrace
     artifacts:
-      - app/build/outputs/bundle/release/*.aab
-      - app/build/outputs/apk/release/*.apk
+      - "app/build/outputs/bundle/release/*.aab"
+      - "app/build/outputs/apk/release/*.apk"
     publishing:
       email:
         recipients:
