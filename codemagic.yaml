@@ -12,9 +12,6 @@ workflows:
       vars:
         XCODE_PROJECT: "RossoFuoco.xcodeproj"
         XCODE_SCHEME: "RossoFuoco"
-        APP_STORE_CONNECT_ISSUER_ID: Encrypted(...) # Set in Codemagic UI or App Store Connect integration
-        APP_STORE_CONNECT_KEY_IDENTIFIER: Encrypted(...)
-        APP_STORE_CONNECT_PRIVATE_KEY: Encrypted(...)
       xcode: latest
       cocoapods: default
     triggering:
