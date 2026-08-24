@@ -10,6 +10,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.rossofuoco.personale
       vars:
+        BUNDLE_ID: "com.rossofuoco.personale"
         XCODE_PROJECT: "RossoFuoco.xcodeproj"
         XCODE_SCHEME: "RossoFuoco"
       xcode: latest
@@ -34,6 +35,11 @@ workflows:
       - name: Generate Xcode Project
         script: |
           xcodegen generate
+      - name: Fetch or create signing files automatically
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
       - name: Set up code signing settings on Xcode project
         script: |
           xcode-project use-profiles --project "$XCODE_PROJECT"
