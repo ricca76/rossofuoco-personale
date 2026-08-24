@@ -48,7 +48,7 @@ workflows:
             --create || true
       - name: Set up signing certificate
         script: |
-          keychain add-certificates
+          keychain add-certificates || true
       - name: Set up code signing settings on Xcode project
         script: |
           xcode-project use-profiles --project "$XCODE_PROJECT"
