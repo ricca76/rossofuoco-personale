@@ -8,7 +8,7 @@ options:
 settings:
   base:
     PRODUCT_BUNDLE_IDENTIFIER: com.rossofuoco.personale
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: "H4ZVRKZ2QZ"
     CODE_SIGN_STYLE: Automatic
     CURRENT_PROJECT_VERSION: 56
     MARKETING_VERSION: 1.0.0
@@ -42,6 +42,7 @@ targets:
       base:
         PRODUCT_NAME: RossoFuoco
         PRODUCT_BUNDLE_IDENTIFIER: com.rossofuoco.personale
+        DEVELOPMENT_TEAM: "H4ZVRKZ2QZ"
         INFOPLIST_FILE: ios/Info.plist
         CURRENT_PROJECT_VERSION: 56
         MARKETING_VERSION: 1.0.0

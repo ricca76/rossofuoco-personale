@@ -10,6 +10,8 @@ workflows:
         - app_store_credentials # Maps Codemagic UI Environment Variable group if defined
       vars:
         BUNDLE_ID: "com.rossofuoco.personale"
+        APP_STORE_CONNECT_BUNDLE_IDENTIFIER: "com.rossofuoco.personale"
+        APPLE_TEAM_ID: "H4ZVRKZ2QZ"
         XCODE_PROJECT: "RossoFuoco.xcodeproj"
         XCODE_SCHEME: "RossoFuoco"
         # The following will read from Codemagic Environment Variables or default to integrations
