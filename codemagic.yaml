@@ -47,10 +47,10 @@ workflows:
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --create || true
+            --create
       - name: Set up code signing settings on Xcode project
         script: |
-          xcode-project use-profiles
+          xcode-project use-profiles --project "$XCODE_PROJECT"
       - name: Increment build number
         script: |
           BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_BUNDLE_IDENTIFIER") + 1))
@@ -59,8 +59,7 @@ workflows:
         script: |
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME" \
-            --archive-flags="-destination 'generic/platform=iOS'"
+            --scheme "$XCODE_SCHEME"
     artifacts:
       - "build/ios/ipa/*.ipa"
       - "/tmp/xcodebuild_logs/*.log"
