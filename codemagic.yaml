@@ -90,8 +90,6 @@ workflows:
     max_build_duration: 30
     instance_type: mac_mini_m2
     environment:
-      groups:
-        - google_play_credentials
       vars:
         PACKAGE_NAME: "com.rossofuoco.personale"
         KEYSTORE_PATH: "release-upload.keystore"
@@ -123,6 +121,16 @@ workflows:
       - name: Build Android AAB & APK
         script: |
           gradle :app:bundleRelease :app:assembleRelease --stacktrace
+      - name: Publish to Google Play (if Service Account JSON is configured)
+        script: |
+          if [ -n "$GCLOUD_SERVICE_ACCOUNT_CREDENTIALS" ]; then
+            echo "Google Play credentials detected! Preparing deployment..."
+            echo "$GCLOUD_SERVICE_ACCOUNT_CREDENTIALS" > /tmp/google_play_key.json
+            python3 scripts/publish_playstore.py /tmp/google_play_key.json internal || true
+          else
+            echo "ℹ️ GCLOUD_SERVICE_ACCOUNT_CREDENTIALS not provided in environment."
+            echo "Signed release AAB and APK have been produced and will be uploaded to Codemagic artifacts."
+          fi
     artifacts:
       - "app/build/outputs/bundle/release/*.aab"
       - "app/build/outputs/apk/release/*.apk"
@@ -133,7 +141,3 @@ workflows:
         notify:
           success: true
           failure: true
-      google_play:
-        credentials: ${GCLOUD_SERVICE_ACCOUNT_CREDENTIALS:-""}
-        track: internal
-        submit_as_draft: false
