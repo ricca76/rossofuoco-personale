@@ -59,8 +59,15 @@ workflows:
           xcode-project use-profiles --project "$XCODE_PROJECT"
       - name: Increment build number
         script: |
-          BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_BUNDLE_IDENTIFIER") + 1))
-          agvtool new-version -all $BUILD_NUMBER || true
+          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_BUNDLE_IDENTIFIER" || echo "56")
+          if [ -z "$LATEST_BUILD" ] || [ "$LATEST_BUILD" = "None" ] || [ "$LATEST_BUILD" -lt 56 ]; then
+            BUILD_NUMBER=$((56 + $BUILD_NUMBER))
+          else
+            BUILD_NUMBER=$(($LATEST_BUILD + 1))
+          fi
+          echo "Setting Build Number to: $BUILD_NUMBER"
+          agvtool new-version -all "$BUILD_NUMBER" || true
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/Info.plist || true
       - name: Build iOS IPA
         script: |
           xcode-project build-ipa \
