@@ -59,13 +59,37 @@ workflows:
           xcode-project use-profiles --project "$XCODE_PROJECT"
       - name: Increment build number
         script: |
-          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_BUNDLE_IDENTIFIER" || echo "56")
-          if [ -z "$LATEST_BUILD" ] || [ "$LATEST_BUILD" = "None" ] || [ "$LATEST_BUILD" -lt 56 ]; then
-            BUILD_NUMBER=$((56 + $BUILD_NUMBER))
-          else
-            BUILD_NUMBER=$(($LATEST_BUILD + 1))
-          fi
-          echo "Setting Build Number to: $BUILD_NUMBER"
+          BUILD_NUMBER=$(python3 -c '
+          import base64, subprocess, time, urllib.request, json, os
+          key_id = os.environ.get("APP_STORE_CONNECT_KEY_IDENTIFIER", "GR53DN344C")
+          issuer_id = os.environ.get("APP_STORE_CONNECT_ISSUER_ID", "d958d7b5-8557-4cc6-9d2b-43128ac100a3")
+          p8_key = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY", "")
+          with open("/tmp/asc_key.p8", "w") as f:
+              f.write(p8_key)
+          def b64url(d):
+              if isinstance(d, str): d = d.encode("utf-8")
+              return base64.urlsafe_b64encode(d).decode("utf-8").rstrip("=")
+          header = {"alg": "ES256", "kid": key_id, "typ": "JWT"}
+          now = int(time.time())
+          payload = {"iss": issuer_id, "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"}
+          signing_input = f"{b64url(json.dumps(header))}.{b64url(json.dumps(payload))}"
+          p = subprocess.Popen(["openssl", "dgst", "-sha256", "-sign", "/tmp/asc_key.p8"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+          der_sig, _ = p.communicate(signing_input.encode("utf-8"))
+          idx = 2; r_len = der_sig[idx+1]; r = der_sig[idx+2 : idx+2+r_len]; idx = idx + 2 + r_len; s_len = der_sig[idx+1]; s = der_sig[idx+2 : idx+2+s_len]
+          raw_sig = r[-32:].rjust(32, b"\x00") + s[-32:].rjust(32, b"\x00")
+          token = f"{signing_input}.{b64url(raw_sig)}"
+          headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+          try:
+              req_builds = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/builds?filter[app]=6803344018&limit=50", headers=headers)
+              with urllib.request.urlopen(req_builds) as resp:
+                  data = json.loads(resp.read().decode("utf-8"))
+                  versions = [int(b["attributes"]["version"]) for b in data.get("data", []) if b["attributes"].get("version", "").isdigit()]
+                  max_v = max(versions) if versions else 83
+                  print(max_v + 1)
+          except Exception as e:
+              print(84)
+          ')
+          echo "Computed next build number: $BUILD_NUMBER"
           agvtool new-version -all "$BUILD_NUMBER" || true
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/Info.plist || true
       - name: Build iOS IPA
