@@ -12,15 +12,34 @@ android {
         applicationId = "com.rossofuoco.personale"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        val envVersionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull()
+        versionCode = envVersionCode?.plus(84) ?: 84
+        versionName = System.getenv("APP_VERSION_NAME") ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            val customKeystorePath = System.getenv("KEYSTORE_PATH")
+            val keystoreFile = if (!customKeystorePath.isNullOrEmpty()) {
+                file(customKeystorePath)
+            } else {
+                rootProject.file("release-upload.keystore")
+            }
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "RossoFuoco2026SecureKey!"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "rossofuoco"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "RossoFuoco2026SecureKey!"
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

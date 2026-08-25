@@ -90,22 +90,36 @@ workflows:
     max_build_duration: 30
     instance_type: linux_x2
     environment:
-      android_signing:
-        - PlayStoreKey
+      groups:
+        - google_play_credentials
       vars:
         PACKAGE_NAME: "com.rossofuoco.personale"
+        KEYSTORE_PATH: "release-upload.keystore"
+        KEYSTORE_PASSWORD: "RossoFuoco2026SecureKey!"
+        KEY_ALIAS: "rossofuoco"
+        KEY_PASSWORD: "RossoFuoco2026SecureKey!"
       java: 17
     triggering:
       events:
         - push
+        - tag
       branch_patterns:
         - pattern: 'main'
           include: true
           source: true
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
     scripts:
       - name: Set up local.properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      - name: Set up Release Keystore
+        script: |
+          if [ -n "$CM_KEYSTORE" ]; then
+            echo "Decoding custom CM_KEYSTORE from environment..."
+            echo "$CM_KEYSTORE" | base64 --decode > "$CM_BUILD_DIR/release-upload.keystore"
+          fi
       - name: Build Android AAB & APK
         script: |
           gradle :app:bundleRelease :app:assembleRelease --stacktrace
@@ -120,6 +134,6 @@ workflows:
           success: true
           failure: true
       google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        credentials: ${GCLOUD_SERVICE_ACCOUNT_CREDENTIALS:-""}
         track: internal
         submit_as_draft: false
