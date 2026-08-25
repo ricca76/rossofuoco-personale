@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -21,11 +23,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val customKeystorePath = System.getenv("KEYSTORE_PATH")
-            val keystoreFile = if (!customKeystorePath.isNullOrEmpty()) {
-                file(customKeystorePath)
+            val customKeystorePath = System.getenv("KEYSTORE_PATH") ?: "release-upload.keystore"
+            val candidateFile = File(customKeystorePath)
+            val keystoreFile = if (candidateFile.isAbsolute) {
+                candidateFile
             } else {
-                rootProject.file("release-upload.keystore")
+                rootProject.file(customKeystorePath)
             }
             if (keystoreFile.exists()) {
                 storeFile = keystoreFile
@@ -39,7 +42,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null && releaseSigning.storeFile!!.exists()) {
+                signingConfig = releaseSigning
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -118,6 +118,10 @@ workflows:
             echo "Decoding custom CM_KEYSTORE from environment..."
             echo "$CM_KEYSTORE" | base64 --decode > "$CM_BUILD_DIR/release-upload.keystore"
           fi
+          if [ -f "$CM_BUILD_DIR/release-upload.keystore" ]; then
+            cp "$CM_BUILD_DIR/release-upload.keystore" "$CM_BUILD_DIR/app/release-upload.keystore" || true
+            echo "KEYSTORE_PATH=$CM_BUILD_DIR/release-upload.keystore" >> $CM_ENV
+          fi
       - name: Build Android AAB & APK
         script: |
           gradle :app:bundleRelease :app:assembleRelease --stacktrace
